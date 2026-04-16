@@ -1,160 +1,134 @@
-import './ViewEmployee.css'; 
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import './ViewEmployee.css';
 
-const ViewEmployee = ({ employee }) => { 
-  return ( 
-    <div className="view-employee-container"> 
-      <h2 className="view-employee-title">Employee Profile</h2> 
-      
-      {/* Basic Information Card */}
-      <div className="employee-card basic-info-card"> 
+const ViewEmployee = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [employee, setEmployee] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchEmployee = async () => {
+      try {
+        // Check role — GENERAL_USER may only view their own profile
+        const authRes = await fetch('http://localhost:5000/auth/status', { credentials: 'include' });
+        const authData = await authRes.json();
+        if (!authData.loggedIn) return navigate('/login');
+
+        if (authData.user?.role === 'GENERAL_USER' && String(authData.user.id) !== String(id)) {
+          // Redirect to their own profile page instead
+          navigate('/AdminProfile', { replace: true });
+          return;
+        }
+
+        const res = await fetch(`http://localhost:5000/api/employees/${id}`, { credentials: 'include' });
+        if (res.status === 401) return navigate('/login');
+        if (res.status === 403) {
+          navigate('/AdminProfile', { replace: true });
+          return;
+        }
+        if (res.status === 404) return setError('Employee not found.');
+        if (!res.ok) throw new Error('Failed to fetch employee');
+        const data = await res.json();
+        setEmployee(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEmployee();
+  }, [id, navigate]);
+
+  if (loading) return <div style={{ padding: '2rem' }}>Loading...</div>;
+  if (error) return <div style={{ padding: '2rem', color: 'red' }}>{error}</div>;
+  if (!employee) return null;
+
+  return (
+    <div className="view-employee-container">
+      <button
+        onClick={() => navigate('/EmployeeList')}
+        style={{ marginBottom: '1rem', padding: '0.4rem 1rem', cursor: 'pointer' }}
+      >
+        ← Back
+      </button>
+
+      <h2 className="view-employee-title">Employee Profile</h2>
+
+      {/* Basic Information */}
+      <div className="employee-card basic-info-card">
         <div className="employee-photo-section">
           <div className="employee-photo">
-            {employee.photo ? (
-              <img 
-                src={employee.photo} 
-                alt={`${employee.name}'s photo`}
-                className="employee-image"
-              />
-            ) : (
-              <div className="default-avatar">
-                <svg 
-                  className="avatar-icon" 
-                  fill="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
-              </div>
-            )}
+            <div className="default-avatar">
+              <svg className="avatar-icon" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+              </svg>
+            </div>
           </div>
         </div>
-        
+
         <div className="employee-details">
           <h3 className="card-title">Basic Information</h3>
-          <div className="employee-row"> 
-            <span className="label">Name:</span> 
-            <span className="value">{employee.name}</span> 
-          </div> 
-          <div className="employee-row"> 
-            <span className="label">Employee ID:</span> 
-            <span className="value">{employee.id}</span> 
-          </div> 
-          <div className="employee-row"> 
-            <span className="label">Department:</span> 
-            <span className="value">{employee.department}</span> 
-          </div> 
-          <div className="employee-row"> 
-            <span className="label">Designation:</span> 
-            <span className="value">{employee.designation}</span> 
-          </div> 
-          <div className="employee-row"> 
-            <span className="label">Joining Date:</span> 
-            <span className="value">{employee.joiningDate}</span> 
-          </div> 
+          <div className="employee-row">
+            <span className="label">Name:</span>
+            <span className="value">{employee.name}</span>
+          </div>
+          <div className="employee-row">
+            <span className="label">Employee ID:</span>
+            <span className="value">{employee.id}</span>
+          </div>
+          <div className="employee-row">
+            <span className="label">Department:</span>
+            <span className="value">{employee.department?.name || 'N/A'}</span>
+          </div>
+          <div className="employee-row">
+            <span className="label">Position:</span>
+            <span className="value">{employee.position}</span>
+          </div>
+          <div className="employee-row">
+            <span className="label">Joining Date:</span>
+            <span className="value">{employee.joinDate?.split('T')[0] || 'N/A'}</span>
+          </div>
+          <div className="employee-row">
+            <span className="label">Status:</span>
+            <span className="value">{employee.status}</span>
+          </div>
+          <div className="employee-row">
+            <span className="label">Role:</span>
+            <span className="value">{employee.role}</span>
+          </div>
         </div>
       </div>
 
-      {/* Contact Information Card */}
+      {/* Contact Information */}
       <div className="employee-card contact-card">
         <h3 className="card-title">Contact Information</h3>
-        <div className="employee-row"> 
-          <span className="label">Email:</span> 
-          <span className="value">{employee.email}</span> 
-        </div> 
-        <div className="employee-row"> 
-          <span className="label">Phone:</span> 
-          <span className="value">{employee.phone}</span> 
-        </div>
-        <div className="employee-row"> 
-          <span className="label">Address:</span> 
-          <span className="value">{employee.address || 'Not provided'}</span> 
-        </div>
-        <div className="employee-row"> 
-          <span className="label">Emergency Contact:</span> 
-          <span className="value">{employee.emergencyContact || 'Not provided'}</span> 
+        <div className="employee-row">
+          <span className="label">Email:</span>
+          <span className="value">{employee.email}</span>
         </div>
       </div>
 
-      {/* Experience Card */}
+      {/* Professional Details */}
       <div className="employee-card experience-card">
-        <h3 className="card-title">Professional Experience</h3>
-        <div className="employee-row"> 
-          <span className="label">Years of Experience:</span> 
-          <span className="value">{employee.yearsOfExperience || 'Not specified'}</span> 
+        <h3 className="card-title">Professional Details</h3>
+        <div className="employee-row">
+          <span className="label">Age:</span>
+          <span className="value">{employee.age}</span>
         </div>
-        <div className="employee-row"> 
-          <span className="label">Previous Company:</span> 
-          <span className="value">{employee.previousCompany || 'Not provided'}</span> 
+        <div className="employee-row">
+          <span className="label">Years of Experience:</span>
+          <span className="value">{employee.experience}</span>
         </div>
-        <div className="employee-row"> 
-          <span className="label">Previous Role:</span> 
-          <span className="value">{employee.previousRole || 'Not provided'}</span> 
-        </div>
-        <div className="employee-row"> 
-          <span className="label">Key Skills:</span> 
-          <span className="value">
-            {employee.skills ? (
-              <div className="skills-container">
-                {employee.skills.map((skill, index) => (
-                  <span key={index} className="skill-tag">{skill}</span>
-                ))}
-              </div>
-            ) : 'Not provided'}
-          </span> 
+        <div className="employee-row">
+          <span className="label">Salary:</span>
+          <span className="value">${employee.salary?.toLocaleString()}</span>
         </div>
       </div>
-
-      {/* Education & Certifications Card */}
-      <div className="employee-card education-card">
-        <h3 className="card-title">Education & Certifications</h3>
-        <div className="employee-row"> 
-          <span className="label">Education:</span> 
-          <span className="value">{employee.education || 'Not provided'}</span> 
-        </div>
-        <div className="employee-row"> 
-          <span className="label">University:</span> 
-          <span className="value">{employee.university || 'Not provided'}</span> 
-        </div>
-        <div className="employee-row"> 
-          <span className="label">Graduation Year:</span> 
-          <span className="value">{employee.graduationYear || 'Not provided'}</span> 
-        </div>
-        <div className="employee-row"> 
-          <span className="label">Certifications:</span> 
-          <span className="value">
-            {employee.certifications ? (
-              <div className="certifications-container">
-                {employee.certifications.map((cert, index) => (
-                  <span key={index} className="certification-tag">{cert}</span>
-                ))}
-              </div>
-            ) : 'None'}
-          </span> 
-        </div>
-      </div>
-
-      {/* Additional Information Card */}
-      <div className="employee-card additional-card">
-        <h3 className="card-title">Additional Information</h3>
-        <div className="employee-row"> 
-          <span className="label">Salary:</span> 
-          <span className="value">{employee.salary || 'Confidential'}</span> 
-        </div>
-        <div className="employee-row"> 
-          <span className="label">Manager:</span> 
-          <span className="value">{employee.manager || 'Not assigned'}</span> 
-        </div>
-        <div className="employee-row"> 
-          <span className="label">Employment Type:</span> 
-          <span className="value">{employee.employmentType || 'Full-time'}</span> 
-        </div>
-        <div className="employee-row"> 
-          <span className="label">Office Location:</span> 
-          <span className="value">{employee.officeLocation || 'Not specified'}</span> 
-        </div>
-      </div>
-    </div> 
-  ); 
-}; 
+    </div>
+  );
+};
 
 export default ViewEmployee;

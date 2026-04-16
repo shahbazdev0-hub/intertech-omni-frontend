@@ -9,7 +9,7 @@ import LeaveRequests from './components/LeaveRequests';
 import CandidatesPage from './components/CandidatesPage';
 import JobPostingsPage from './components/JobPostingsPage';
 import Salary from './components/Salary';
-import AdminProfile from './components/Dashboard';
+import AdminProfile from './components/MyProfile';
 import ViewEmployee from './components/ViewEmployee';
 import LoginForm from './components/LoginForm';
 import LandingPage from './components/LandingPage';
@@ -20,6 +20,8 @@ import Reporting from './components/Reporting';
 import SystemSettings from './components/SystemSettings';
 import './components/RecruitmentDashboard.css';
 import OvertimePay from './components/OvertimePay';
+import DepartmentManagement from './components/DepartmentManagement';
+import ShiftManagement from './components/ShiftManagement';
 
 const LayoutWithSidebar = () => {
   const navigate = useNavigate();
@@ -54,22 +56,26 @@ const LayoutWithSidebar = () => {
           </div>
         </div>
 
-        <Routes>
-          <Route path="/EmployeeList" element={<EmployeeListPage />} />
-          <Route path="/employee/:id" element={<ViewEmployee />} />
-          <Route path="/AdminProfile" element={<AdminProfile />} />
-          <Route path="/EmployeeGoals" element={<EmployeeGoals />} />
-          <Route path="/Candidates" element={<CandidatesPage />} />
-          <Route path="/JobPostings" element={<JobPostingsPage />} />
-          <Route path="/leave-requests" element={<LeaveRequests />} />
-          <Route path="/dashboard" element={<Reporting />} />
-          <Route path="/attendance" element={<AttendanceLogs />} />
-          <Route path="/PerformanceReview" element={<PerformanceReview />} />
-          <Route path="/Salary" element={<Salary />} />
-          <Route path="/overtime" element={<OvertimePay />} />
-          <Route path="/settings" element={<SystemSettings />} />
-          <Route path="*" element={<h2>Page Not Found</h2>} />
-        </Routes>
+        <div className="main-content">
+          <Routes>
+            <Route path="/EmployeeList" element={<EmployeeListPage />} />
+            <Route path="/employee/:id" element={<ViewEmployee />} />
+            <Route path="/AdminProfile" element={<AdminProfile />} />
+            <Route path="/EmployeeGoals" element={<EmployeeGoals />} />
+            <Route path="/Candidates" element={<CandidatesPage />} />
+            <Route path="/JobPostings" element={<JobPostingsPage />} />
+            <Route path="/leave-requests" element={<LeaveRequests />} />
+            <Route path="/dashboard" element={<Reporting />} />
+            <Route path="/attendance" element={<AttendanceLogs />} />
+            <Route path="/PerformanceReview" element={<PerformanceReview />} />
+            <Route path="/Salary" element={<Salary />} />
+            <Route path="/overtime" element={<OvertimePay />} />
+            <Route path="/departments" element={<DepartmentManagement />} />
+            <Route path="/settings" element={<SystemSettings />} />
+            <Route path="/shifts" element={<ShiftManagement />} />
+            <Route path="*" element={<div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}><h2>404 — Page Not Found</h2></div>} />
+          </Routes>
+        </div>
       </div>
     </div>
   );
