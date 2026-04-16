@@ -8,10 +8,8 @@
 
 /* Layout with Sidebar - Using unique class names */
 .attendance-logs-layout {
-  display: flex;
-  min-height: 100vh;
+  width: 100%;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f9fafb;
 }
 
 .attendance-logs-main-content {
@@ -22,8 +20,8 @@
   background-color: #f9fafb;
   padding: 1.5rem;
   width: 100%;
-  overflow-x: hidden;
-  margin-left: 0; /* Remove any sidebar margin conflicts */
+  min-width: 0;
+  margin-left: 0;
 }
 
 .attendance-logs-container {
@@ -280,39 +278,35 @@
   margin-bottom: 1.5rem;
   border: 1px solid #e5e7eb;
   width: 100%;
-  overflow: hidden;
 }
 
 .attendance-table-wrapper {
   width: 100%;
   overflow-x: auto;
+  border-radius: 0.5rem;
 }
 
 .attendance-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
-  min-width: 1200px;
+  min-width: 900px;
 }
 
 .attendance-table-header {
-  background-color: #f9fafb;
+  background-color: #0C3D4A;
 }
 
 .attendance-table-th {
   padding: 0.75rem 1rem !important;
   text-align: left !important;
   font-size: 0.75rem !important;
-  font-weight: 500 !important;
-  color: #6b7280 !important;
+  font-weight: 600 !important;
+  color: #ffffff !important;
   text-transform: uppercase !important;
   letter-spacing: 0.05em !important;
   white-space: nowrap !important;
-  border-bottom: 1px solid #e5e7eb !important;
-  background-color: #f9fafb !important;
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  border-bottom: none !important;
+  background-color: #0C3D4A !important;
 }
 
 .attendance-table-body {
@@ -452,6 +446,18 @@
 .attendance-status-pending {
   background-color: #fef3c7;
   color: #92400e;
+}
+
+.attendance-status-ncns {
+  background-color: #fce7f3;
+  color: #9d174d;
+  font-weight: 700;
+}
+
+.attendance-status-ua {
+  background-color: #ede9fe;
+  color: #5b21b6;
+  font-weight: 700;
 }
 
 .attendance-status-half-day {

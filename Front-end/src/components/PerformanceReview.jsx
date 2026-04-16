@@ -365,11 +365,11 @@ const PerformanceReview = () => {
   // Guard while we check auth state - Following exact pattern from EmployeeGoals
   if (!authChecked) return null;
 
-  // Role-based permissions - Following exact pattern from EmployeeGoals
-  const isAdmin = role === 'ADMIN';
-  const isTeamLead = role === 'TEAM_LEAD';
-  const canManageReviews = isAdmin || isTeamLead; // ADMIN and TEAM_LEAD can manage
-  // EMPLOYEE can only view and search (no add, no bulk actions, no edit/delete)
+  // Role-based permissions
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
+  const isTeamLead = role === 'HOD' || role === 'HR';
+  const canManageReviews = isAdmin || isTeamLead;
+  // GENERAL_USER can only view their own reviews
 
   if (loading && reviews.length === 0) {
     return (
