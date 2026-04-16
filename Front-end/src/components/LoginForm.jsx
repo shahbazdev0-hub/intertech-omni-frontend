@@ -25,7 +25,14 @@ const LoginForm = () => {
 
       if (response.ok && data.user) {
         localStorage.setItem('valid', true);
-        navigate('/EmployeeList');
+        // TMS users go to TMS module, others go to Employee List
+        if (data.user.isTmsUser) {
+          localStorage.setItem('tmsUser', JSON.stringify(data.user));
+          localStorage.setItem('tmsPermissions', JSON.stringify(data.user.permissions || []));
+          navigate('/tms/upload-resume');
+        } else {
+          navigate('/EmployeeList');
+        }
       } else {
         setError(data.message || 'Invalid email or password');
       }

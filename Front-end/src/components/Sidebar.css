@@ -5,7 +5,8 @@
   color: white;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+    overflow-y: auto;
   position: fixed;
   left: 0;
   top: 0;

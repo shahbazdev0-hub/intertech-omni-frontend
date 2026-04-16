@@ -19,7 +19,7 @@ const Sidebar = ({ onLogout }) => {
     attendanceLeave: false,
     payrollCompensations: false,
     performance: false,
-    recruitment: false,
+    talentManagement: false,
   });
 
   useEffect(() => {
@@ -193,29 +193,54 @@ const Sidebar = ({ onLogout }) => {
           )}
         </li>
 
-        {/* Recruitment */}
+
+{/* Talent Management */}
+        {(() => {
+          const tmsPerms = JSON.parse(localStorage.getItem('tmsPermissions') || '[]');
+          const hasTms = tmsPerms.length > 0;
+          if (!hasTms) return null;
+          return (
         <li className="menu-section">
-          <div
-            className={`menu-section-header${sectionActive('/Candidates', '/JobPostings') ? ' section-active' : ''}`}
-            onClick={() => toggleSection("recruitment")}
-          >
-            <MdFeaturedPlayList className="menu-icon" />
-            <span>Recruitment</span>
-            {expandedSections.recruitment
-              ? <MdExpandMore className="chevron" />
-              : <MdChevronRight className="chevron" />}
-          </div>
-          {expandedSections.recruitment && (
-            <ul className="submenu">
-              <li className={`submenu-item${isActive('/Candidates') ? ' active' : ''}`}>
-                <Link to="/Candidates">Candidates</Link>
+          <div className="menu-section-header" onClick={() => toggleSection("talentManagement")}>
+            <MdPayments style={{ marginRight: '13px', fontSize: '24px' }} />
+             <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Talent Management</span>
+             <i className={`bi bi-chevron-${expandedSections.talentManagement ? "down" : "right"} chevron`}></i>
+           </div>
+           {expandedSections.talentManagement && (
+             <ul className="submenu">
+               {tmsPerms.includes('UPLOAD_RESUME') && (
+               <li className="submenu-item">
+                 <Link to="/tms/upload-resume" style={{ textDecoration: 'none', color: 'inherit' }}>Upload Resume</Link>
               </li>
+               )}
+              <li className="submenu-item">
+                <Link to="/tms/folders" style={{ textDecoration: 'none', color: 'inherit' }}>Talent Management</Link>
+              </li>
+              {tmsPerms.includes('VIEW_REPORTS') && (
+              <li className="submenu-item">
+                <Link to="/tms/reports" style={{ textDecoration: 'none', color: 'inherit' }}>TMS Reports</Link>
+              </li>
+              )}
+              {tmsPerms.includes('VIEW_AUDIT_LOG') && (
+              <li className="submenu-item">
+                <Link to="/tms/audit" style={{ textDecoration: 'none', color: 'inherit' }}>Audit Log</Link>
+              </li>
+              )}
+              {(tmsPerms.includes('MANAGE_USERS') || tmsPerms.includes('RESET_PASSWORD') || tmsPerms.includes('MANAGE_DESIGNATIONS')) && (
+              <li className="submenu-item">
+                <Link to="/tms/user-management" style={{ textDecoration: 'none', color: 'inherit' }}>User Management</Link>
+              </li>
+              )}
+              {tmsPerms.includes('MANAGE_PERMISSIONS') && (
               <li className={`submenu-item${isActive('/JobPostings') ? ' active' : ''}`}>
-                <Link to="/JobPostings">Job Postings</Link>
+                <Link to="/tms/permissions">Permissions</Link>
               </li>
-            </ul>
+                )}
+          </ul>
           )}
         </li>
+          );
+        })()}
 
         {/* Reporting — Super Admin, Admin, HR */}
         {['SUPER_ADMIN','ADMIN','HR'].includes(role) && (

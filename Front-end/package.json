@@ -12,6 +12,7 @@
   "dependencies": {
     "axios": "^1.15.0",
     "lucide-react": "^1.8.0",
+    "mammoth": "^1.12.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-icons": "^5.6.0",

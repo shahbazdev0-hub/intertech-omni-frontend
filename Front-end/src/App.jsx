@@ -6,8 +6,6 @@ import Profile from './components/ViewEmployee';
 import EmployeeGoals from './components/EmployeeGoals';
 import PerformanceReview from './components/PerformanceReview';
 import LeaveRequests from './components/LeaveRequests';
-import CandidatesPage from './components/CandidatesPage';
-import JobPostingsPage from './components/JobPostingsPage';
 import Salary from './components/Salary';
 import AdminProfile from './components/MyProfile';
 import ViewEmployee from './components/ViewEmployee';
@@ -18,10 +16,17 @@ import AboutPage from './components/AboutPage';
 import ContactPage from './components/ContactPage';
 import Reporting from './components/Reporting';
 import SystemSettings from './components/SystemSettings';
-import './components/RecruitmentDashboard.css';
 import OvertimePay from './components/OvertimePay';
 import DepartmentManagement from './components/DepartmentManagement';
 import ShiftManagement from './components/ShiftManagement';
+import TmsUploadResume from './components/TmsUploadResume';
+import TmsFolders from './components/TmsFolders';
+import TmsFolderDetail from './components/TmsFolderDetail';
+import TmsReports from './components/TmsReports';
+import TmsAuditLog from './components/TmsAuditLog';
+import TmsUserManagement from './components/TmsUserManagement';
+import TmsPermissions from './components/TmsPermissions';
+import './components/Tms.css';
 
 const LayoutWithSidebar = () => {
   const navigate = useNavigate();
@@ -35,6 +40,9 @@ const LayoutWithSidebar = () => {
     } catch (err) {
       console.error('Logout failed:', err);
     }
+    localStorage.removeItem('tmsUser');
+    localStorage.removeItem('tmsPermissions');
+    localStorage.removeItem('valid');
     navigate('/');
   };
 
@@ -62,8 +70,13 @@ const LayoutWithSidebar = () => {
             <Route path="/employee/:id" element={<ViewEmployee />} />
             <Route path="/AdminProfile" element={<AdminProfile />} />
             <Route path="/EmployeeGoals" element={<EmployeeGoals />} />
-            <Route path="/Candidates" element={<CandidatesPage />} />
-            <Route path="/JobPostings" element={<JobPostingsPage />} />
+            <Route path="/tms/upload-resume" element={<TmsUploadResume />} />
+          <Route path="/tms/folders" element={<TmsFolders />} />
+          <Route path="/tms/folders/:id" element={<TmsFolderDetail />} />
+            <Route path="/tms/reports" element={<TmsReports />} />
+          <Route path="/tms/audit" element={<TmsAuditLog />} />
+          <Route path="/tms/user-management" element={<TmsUserManagement />} />
+          <Route path="/tms/permissions" element={<TmsPermissions />} />
             <Route path="/leave-requests" element={<LeaveRequests />} />
             <Route path="/dashboard" element={<Reporting />} />
             <Route path="/attendance" element={<AttendanceLogs />} />
