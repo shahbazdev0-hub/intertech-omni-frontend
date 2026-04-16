@@ -316,9 +316,9 @@ const Reporting = () => {
   };
 
   const filteredReports = reports.filter(report => {
-    const matchesSearch = report.title.toLowerCase().includes(filters.search.toLowerCase());
-    const matchesType = filters.type === 'all' || report.reportType === filters.type;
-    const matchesStatus = filters.status === 'all' || report.status === filters.status.toUpperCase();
+    const matchesSearch = (report.title || report.name || '').toLowerCase().includes(filters.search.toLowerCase());
+    const matchesType = filters.type === 'all' || report.reportType === filters.type || report.type === filters.type;
+    const matchesStatus = filters.status === 'all' || (report.status || '').toUpperCase() === filters.status.toUpperCase();
     return matchesSearch && matchesType && matchesStatus;
   });
 
@@ -1112,14 +1112,14 @@ const Reporting = () => {
                                   color: '#111827',
                                   margin: '0 0 4px 0'
                                 }}>
-                                  {report.title}
+                                  {report.title || report.name}
                                 </div>
                                 <div style={{
                                   fontSize: '14px',
                                   color: '#6b7280',
                                   margin: 0
                                 }}>
-                                  {report.description}
+                                  {report.description || report.id}
                                 </div>
                               </div>
                             </td>
@@ -1128,7 +1128,7 @@ const Reporting = () => {
                               fontSize: '14px',
                               color: '#111827'
                             }}>
-                              {report.reportType}
+                              {report.reportType || report.type}
                             </td>
                             <td style={{ padding: '16px 24px' }}>
                               {getStatusBadge(report.status)}

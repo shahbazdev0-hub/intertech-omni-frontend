@@ -6,22 +6,18 @@
 
 /* Layout with Sidebar */
 .overtime-layout {
-  display: flex;
-  min-height: 100vh;
+  width: 100%;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f5f5f5;
 }
 
 .overtime-main-content {
-  flex: 1;
-  margin-left: 280px; /* Account for fixed sidebar */
-  min-height: 100vh;
+  width: 100%;
   display: flex;
   flex-direction: column;
   background-color: #f5f5f5;
   padding: 20px;
-  width: calc(100% - 280px);
   box-sizing: border-box;
+  min-width: 0;
 }
 
 /* Page Header */
@@ -283,7 +279,6 @@
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
   border: 1px solid #f0f0f0;
-  overflow: hidden;
   margin-bottom: 24px;
   width: 100%;
 }
@@ -292,18 +287,17 @@
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
 }
 
 .overtime-table {
   width: 100%;
-  min-width: 1300px; /* Increased to accommodate hourly rate column */
+  min-width: 900px;
   border-collapse: collapse;
-  table-layout: fixed;
 }
 
 .overtime-table-header {
-  background-color: #f8f9fa;
-  border-bottom: 2px solid #e2e8f0;
+  background-color: #0C3D4A;
 }
 
 .overtime-table-th {
@@ -311,11 +305,11 @@
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: #666;
+  color: #ffffff;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
-  border-right: 1px solid #f0f0f0;
+  border-right: 1px solid rgba(255,255,255,0.1);
 }
 
 .overtime-table-th:last-child {
