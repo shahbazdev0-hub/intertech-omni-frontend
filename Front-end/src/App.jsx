@@ -7,7 +7,7 @@ import EmployeeGoals from './components/EmployeeGoals';
 import PerformanceReview from './components/PerformanceReview';
 import LeaveRequests from './components/LeaveRequests';
 import Salary from './components/Salary';
-import AdminProfile from './components/Dashboard';
+import AdminProfile from './components/MyProfile';
 import ViewEmployee from './components/ViewEmployee';
 import LoginForm from './components/LoginForm';
 import LandingPage from './components/LandingPage';
@@ -17,6 +17,8 @@ import ContactPage from './components/ContactPage';
 import Reporting from './components/Reporting';
 import SystemSettings from './components/SystemSettings';
 import OvertimePay from './components/OvertimePay';
+import DepartmentManagement from './components/DepartmentManagement';
+import ShiftManagement from './components/ShiftManagement';
 import TmsUploadResume from './components/TmsUploadResume';
 import TmsFolders from './components/TmsFolders';
 import TmsFolderDetail from './components/TmsFolderDetail';
@@ -62,27 +64,31 @@ const LayoutWithSidebar = () => {
           </div>
         </div>
 
-        <Routes>
-          <Route path="/EmployeeList" element={<EmployeeListPage />} />
-          <Route path="/employee/:id" element={<ViewEmployee />} />
-          <Route path="/AdminProfile" element={<AdminProfile />} />
-          <Route path="/EmployeeGoals" element={<EmployeeGoals />} />
-          <Route path="/tms/upload-resume" element={<TmsUploadResume />} />
+        <div className="main-content">
+          <Routes>
+            <Route path="/EmployeeList" element={<EmployeeListPage />} />
+            <Route path="/employee/:id" element={<ViewEmployee />} />
+            <Route path="/AdminProfile" element={<AdminProfile />} />
+            <Route path="/EmployeeGoals" element={<EmployeeGoals />} />
+            <Route path="/tms/upload-resume" element={<TmsUploadResume />} />
           <Route path="/tms/folders" element={<TmsFolders />} />
           <Route path="/tms/folders/:id" element={<TmsFolderDetail />} />
-          <Route path="/tms/reports" element={<TmsReports />} />
+            <Route path="/tms/reports" element={<TmsReports />} />
           <Route path="/tms/audit" element={<TmsAuditLog />} />
           <Route path="/tms/user-management" element={<TmsUserManagement />} />
           <Route path="/tms/permissions" element={<TmsPermissions />} />
-          <Route path="/leave-requests" element={<LeaveRequests />} />
-          <Route path="/dashboard" element={<Reporting />} />
-          <Route path="/attendance" element={<AttendanceLogs />} />
-          <Route path="/PerformanceReview" element={<PerformanceReview />} />
-          <Route path="/Salary" element={<Salary />} />
-          <Route path="/overtime" element={<OvertimePay />} />
-          <Route path="/settings" element={<SystemSettings />} />
-          <Route path="*" element={<h2>Page Not Found</h2>} />
-        </Routes>
+            <Route path="/leave-requests" element={<LeaveRequests />} />
+            <Route path="/dashboard" element={<Reporting />} />
+            <Route path="/attendance" element={<AttendanceLogs />} />
+            <Route path="/PerformanceReview" element={<PerformanceReview />} />
+            <Route path="/Salary" element={<Salary />} />
+            <Route path="/overtime" element={<OvertimePay />} />
+            <Route path="/departments" element={<DepartmentManagement />} />
+            <Route path="/settings" element={<SystemSettings />} />
+            <Route path="/shifts" element={<ShiftManagement />} />
+            <Route path="*" element={<div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}><h2>404 — Page Not Found</h2></div>} />
+          </Routes>
+        </div>
       </div>
     </div>
   );
