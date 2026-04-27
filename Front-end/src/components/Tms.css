@@ -180,12 +180,12 @@
 }
 
 .tms-btn-primary {
-  background: #3b82f6;
+  background: #0C3D4A;
   color: #fff;
 }
 
 .tms-btn-primary:hover:not(:disabled) {
-  background: #2563eb;
+  background: #0a3039;
 }
 
 .tms-btn-secondary {
@@ -248,8 +248,8 @@
 .tms-form-group select:focus,
 .tms-form-group textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #0C3D4A;
+  box-shadow: 0 0 0 3px rgba(12, 61, 74, 0.1);
 }
 
 .tms-form-group small {
@@ -475,12 +475,12 @@
 }
 
 .tms-actions .tms-view-btn {
-  color: #3b82f6;
+  color: #0C3D4A;
 }
 
 .tms-actions .tms-view-btn:hover {
-  background: #eff6ff;
-  color: #2563eb;
+  background: #e6eef0;
+  color: #0a3039;
 }
 
 .tms-actions .tms-delete-btn {
@@ -701,7 +701,7 @@
 .tms-stat-card {
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-top: 3px solid #3b82f6;
+  border-top: 3px solid #0C3D4A;
   border-radius: 10px;
   padding: 16px;
   text-align: center;
@@ -849,8 +849,8 @@
 }
 
 .tms-tab-active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: #0C3D4A;
+  border-bottom-color: #0C3D4A;
 }
 
 /* Loading */
@@ -928,11 +928,11 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 .tms-toggle input:checked + .tms-toggle-slider {
-  background-color: #3b82f6;
+  background-color: #0C3D4A;
 }
 .tms-toggle input:checked + .tms-toggle-slider::before {
   transform: translateX(18px);
 }
 .tms-toggle input:focus-visible + .tms-toggle-slider {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 0 2px rgba(12, 61, 74, 0.4);
 }

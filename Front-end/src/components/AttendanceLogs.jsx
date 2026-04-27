@@ -36,11 +36,19 @@ const AttendanceLogs = () => {
   const [markLoading, setMarkLoading] = useState(false);
   const [markResult, setMarkResult] = useState(null); // { type: 'success'|'error', message }
 
-  // Fetch current user role
+  // Fetch current user role and auto-set employee for non-managers
   useEffect(() => {
     fetch('http://localhost:5000/auth/status', { credentials: 'include' })
       .then(r => r.json())
-      .then(data => { if (data.loggedIn) setRole(data.user?.role); })
+      .then(data => {
+        if (data.loggedIn) {
+          setRole(data.user?.role);
+          // Auto-set employeeId for regular employees so they can check in/out
+          if (!['SUPER_ADMIN', 'ADMIN', 'HR', 'HOD'].includes(data.user?.role)) {
+            setSelectedEmployee(String(data.user?.id));
+          }
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -66,6 +74,7 @@ const AttendanceLogs = () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      if (selectedEmployee) params.append('employeeId', selectedEmployee);
       if (selectedDepartment !== 'all') params.append('department', selectedDepartment);
       if (selectedStatus !== 'all') params.append('status', selectedStatus);
 
@@ -103,7 +112,7 @@ const AttendanceLogs = () => {
   };
 
   useEffect(() => { fetchEmployees(); }, []);
-  useEffect(() => { fetchAttendanceLogs(); }, [selectedDepartment, selectedStatus, dateRange]);
+  useEffect(() => { fetchAttendanceLogs(); }, [selectedDepartment, selectedStatus, dateRange, selectedEmployee]);
 
   const filteredData = useMemo(() => {
     if (!searchTerm) return attendanceData;
@@ -229,6 +238,7 @@ const AttendanceLogs = () => {
 
           {/* Attendance Tracker Section */}
           <div className="attendance-tracker-section" style={{ marginBottom: '24px' }}>
+            {isManager && (
             <div className="attendance-employee-selector" style={{ marginBottom: '16px' }}>
               <label htmlFor="employee-select" style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#0C3D4A' }}>
                 Select Employee for Attendance Tracking:
@@ -248,6 +258,7 @@ const AttendanceLogs = () => {
                 ))}
               </select>
             </div>
+            )}
             <AttendanceTracker
               key={trackerKey}
               employeeId={selectedEmployee}
@@ -255,30 +266,8 @@ const AttendanceLogs = () => {
             />
           </div>
 
-          {/* NCNS/UA Quick Mark (manager only) */}
+          {/* Stats Cards — only visible to managers */}
           {isManager && (
-            <div style={{
-              background: '#fff3cd',
-              border: '1px solid #ffc107',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              marginBottom: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              flexWrap: 'wrap'
-            }}>
-              <AlertTriangle size={18} style={{ color: '#856404', flexShrink: 0 }} />
-              <span style={{ color: '#856404', fontWeight: 500, fontSize: '0.9rem' }}>
-                Manager Action:
-              </span>
-              <span style={{ color: '#856404', fontSize: '0.85rem' }}>
-                Select an employee from the table rows below to mark as NCNS or Unauthorized Absence.
-              </span>
-            </div>
-          )}
-
-          {/* Stats Cards */}
           <div className="attendance-stats-grid">
             <div className="attendance-stat-card attendance-stat-blue">
               <div className="attendance-stat-content">
@@ -325,11 +314,13 @@ const AttendanceLogs = () => {
               </div>
             </div>
           </div>
+          )}
 
           {/* Filters and Controls */}
           <div className="attendance-filters-container">
             <div className="attendance-filters-row">
               <div className="attendance-search-filters">
+                {isManager && (
                 <div className="attendance-search-box">
                   <Search className="attendance-search-icon" />
                   <input
@@ -340,6 +331,7 @@ const AttendanceLogs = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
+                )}
                 <select
                   className="attendance-filter-select"
                   value={dateRange}
@@ -351,6 +343,7 @@ const AttendanceLogs = () => {
                   <option value="last_week">Last Week</option>
                   <option value="this_month">This Month</option>
                 </select>
+                {isManager && (
                 <select
                   className="attendance-filter-select"
                   value={selectedDepartment}
@@ -362,6 +355,7 @@ const AttendanceLogs = () => {
                     </option>
                   ))}
                 </select>
+                )}
                 <select
                   className="attendance-filter-select"
                   value={selectedStatus}
@@ -374,8 +368,6 @@ const AttendanceLogs = () => {
                   <option value="HALF_DAY">Half Day</option>
                   <option value="EARLY_DEPARTURE">Early Out</option>
                   <option value="OVERTIME">Overtime</option>
-                  <option value="NCNS">NCNS</option>
-                  <option value="UA">Unauthorized Absence</option>
                 </select>
               </div>
               <button onClick={handleExport} className="attendance-export-btn" disabled={loading}>
@@ -404,7 +396,6 @@ const AttendanceLogs = () => {
                       <th className="attendance-table-th">Break / Type</th>
                       <th className="attendance-table-th">Status</th>
                       <th className="attendance-table-th">Location</th>
-                      {isManager && <th className="attendance-table-th">Actions</th>}
                     </tr>
                   </thead>
                   <tbody className="attendance-table-body">
@@ -454,54 +445,6 @@ const AttendanceLogs = () => {
                           )}
                         </td>
                         <td className="attendance-table-td attendance-table-location">{record.location || '—'}</td>
-                        {isManager && (
-                          <td className="attendance-table-td">
-                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                              <button
-                                onClick={() => openMarkModal(
-                                  { id: record.employeeId, employee: record.employee },
-                                  new Date(record.date).toISOString().split('T')[0],
-                                  'NCNS'
-                                )}
-                                style={{
-                                  padding: '3px 8px',
-                                  fontSize: '0.72rem',
-                                  fontWeight: 600,
-                                  background: '#fee2e2',
-                                  color: '#b91c1c',
-                                  border: '1px solid #fca5a5',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  whiteSpace: 'nowrap'
-                                }}
-                                title="Mark as No Call No Show"
-                              >
-                                NCNS
-                              </button>
-                              <button
-                                onClick={() => openMarkModal(
-                                  { id: record.employeeId, employee: record.employee },
-                                  new Date(record.date).toISOString().split('T')[0],
-                                  'UA'
-                                )}
-                                style={{
-                                  padding: '3px 8px',
-                                  fontSize: '0.72rem',
-                                  fontWeight: 600,
-                                  background: '#fef3c7',
-                                  color: '#92400e',
-                                  border: '1px solid #fcd34d',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  whiteSpace: 'nowrap'
-                                }}
-                                title="Mark as Unauthorized Absence"
-                              >
-                                UA
-                              </button>
-                            </div>
-                          </td>
-                        )}
                       </tr>
                     ))}
                   </tbody>

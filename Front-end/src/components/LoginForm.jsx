@@ -29,8 +29,18 @@ const LoginForm = () => {
         if (data.user.isTmsUser) {
           localStorage.setItem('tmsUser', JSON.stringify(data.user));
           localStorage.setItem('tmsPermissions', JSON.stringify(data.user.permissions || []));
-          navigate('/tms/upload-resume');
+          localStorage.setItem('ticketPermissions', JSON.stringify(data.user.ticketPermissions || []));
+          localStorage.setItem('payrollPermissions', JSON.stringify(data.user.payrollPermissions || []));
+          // IT Support goes to Ticket System, other TMS users go to TMS module
+          if (data.user.isItSupport) {
+            navigate('/tickets');
+          } else {
+            navigate('/tms/upload-resume');
+          }
         } else {
+          // Store ticket permissions for employee users
+          localStorage.setItem('ticketPermissions', JSON.stringify(data.user.ticketPermissions || []));
+          localStorage.setItem('payrollPermissions', JSON.stringify(data.user.payrollPermissions || []));
           navigate('/EmployeeList');
         }
       } else {

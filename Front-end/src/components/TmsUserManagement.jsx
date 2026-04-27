@@ -91,10 +91,10 @@ export default function TmsUserManagement() {
     e.preventDefault();
     if (newPassword.length < 6) return showMsg('Password must be at least 6 characters', true);
     try {
-      const res = await fetch(`${API}/manage/users/${resetTarget.id}/reset-password`, {
+      const res = await fetch(`${API}/manage/users/${resetTarget.id}`, {
         method: 'PUT', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newPassword }),
+        body: JSON.stringify({ password: newPassword }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
@@ -150,6 +150,7 @@ export default function TmsUserManagement() {
     HR_MANAGER: 'HR Manager',
     HOD: 'HOD',
     SUPER_ADMIN: 'Super Admin',
+    IT_SUPPORT: 'IT Support',
   };
 
   if (loading) return <div className="tms-loading">Loading...</div>;
@@ -308,6 +309,7 @@ export default function TmsUserManagement() {
                   <option value="HR_MANAGER">HR Manager</option>
                   <option value="HOD">HOD</option>
                   <option value="SUPER_ADMIN">Super Admin</option>
+                  <option value="IT_SUPPORT">IT Support</option>
                 </select>
               </div>
               <div className="tms-form-actions">

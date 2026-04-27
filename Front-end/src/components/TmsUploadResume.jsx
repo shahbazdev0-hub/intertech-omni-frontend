@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Download, Edit3, MessageSquare, Search, X, Filter, Trash2, Eye } from 'lucide-react';
+import { Upload, Download, Edit3, MessageSquare, Search, X, Filter, Trash2, Eye, UserPlus } from 'lucide-react';
 import mammoth from 'mammoth';
 
 const API = 'http://localhost:5000/api/tms';
@@ -42,6 +42,17 @@ export default function TmsUploadResume() {
   };
 
   const [designations, setDesignations] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [convertModal, setConvertModal] = useState(null);
+  const [convertForm, setConvertForm] = useState({ email: '', salary: '', departmentId: '', joinDate: '', age: '', experience: '', employmentType: 'PROBATION' });
+  const [convertResult, setConvertResult] = useState(null);
+
+  const fetchDepartments = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/departments', { credentials: 'include' });
+      if (res.ok) setDepartments(await res.json());
+    } catch {}
+  };
 
   const fetchUsers = async () => {
     try {
@@ -57,7 +68,7 @@ export default function TmsUploadResume() {
     } catch {}
   };
 
-  useEffect(() => { fetchResumes(); fetchUsers(); fetchDesignations(); }, [search, filterStatus]);
+  useEffect(() => { fetchResumes(); fetchUsers(); fetchDesignations(); fetchDepartments(); }, [search, filterStatus]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -126,6 +137,33 @@ export default function TmsUploadResume() {
   const canDelete = perms.includes('DELETE_RESUME');
   const canUpload = perms.includes('UPLOAD_RESUME');
   const canExport = perms.includes('EXPORT_CSV');
+  const canConvert = perms.includes('MANAGE_USERS');
+
+  const openConvertModal = (resume) => {
+    const name = `${resume.firstName || ''} ${resume.lastName || ''}`.trim();
+    const emailSuggestion = name ? `${name.toLowerCase().replace(/ /g, '.')}@hrcore.com` : '';
+    setConvertForm({ email: emailSuggestion, salary: '', departmentId: '', joinDate: new Date().toISOString().split('T')[0], age: '', experience: '', employmentType: 'PROBATION' });
+    setConvertResult(null);
+    setConvertModal(resume);
+  };
+
+  const handleConvert = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const res = await fetch(`${API}/resumes/${convertModal.id}/convert-to-employee`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(convertForm),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setConvertResult(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   // Preview state
   const [previewModal, setPreviewModal] = useState(null); // { name, html, type, url }
@@ -383,6 +421,82 @@ export default function TmsUploadResume() {
         </div>
       )}
 
+      {/* Convert to Employee Modal */}
+      {convertModal && (
+        <div className="tms-modal-overlay" onClick={() => { setConvertModal(null); setConvertResult(null); }}>
+          <div className="tms-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tms-modal-header">
+              <h2>Convert to Employee — {`${convertModal.firstName || ''} ${convertModal.lastName || ''}`.trim()}</h2>
+              <button className="tms-close-btn" onClick={() => { setConvertModal(null); setConvertResult(null); }}><X size={20} /></button>
+            </div>
+
+            {convertResult ? (
+              <div style={{ padding: '24px' }}>
+                <div style={{ background: '#ecfdf5', border: '1px solid #10b981', borderRadius: '8px', padding: '20px', marginBottom: '16px' }}>
+                  <h3 style={{ color: '#065f46', margin: '0 0 12px' }}>Employee Created Successfully</h3>
+                  <p style={{ margin: '4px 0' }}><strong>Name:</strong> {convertResult.employee.name}</p>
+                  <p style={{ margin: '4px 0' }}><strong>Email:</strong> {convertResult.employee.email}</p>
+                  <p style={{ margin: '4px 0' }}><strong>Position:</strong> {convertResult.employee.position}</p>
+                  <p style={{ margin: '4px 0' }}><strong>Temporary Password:</strong> <code style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold' }}>{convertResult.tempPassword}</code></p>
+                  <p style={{ color: '#92400e', fontSize: '13px', marginTop: '12px' }}>Please share these credentials with the new employee securely.</p>
+                </div>
+                <button className="tms-btn tms-btn-primary" onClick={() => { setConvertModal(null); setConvertResult(null); }}>Close</button>
+              </div>
+            ) : (
+              <form onSubmit={handleConvert} className="tms-upload-form">
+                <div style={{ padding: '12px 20px 0', background: '#f0fdf4', borderRadius: '6px', margin: '0 20px' }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '13px', color: '#166534' }}>
+                    <strong>Candidate:</strong> {`${convertModal.firstName || ''} ${convertModal.lastName || ''}`.trim()} | <strong>Position:</strong> {convertModal.designation}
+                  </p>
+                </div>
+                <div className="tms-form-grid">
+                  <div className="tms-form-group">
+                    <label>Email *</label>
+                    <input type="email" value={convertForm.email} onChange={(e) => setConvertForm({ ...convertForm, email: e.target.value })} required placeholder="employee@hrcore.com" />
+                  </div>
+                  <div className="tms-form-group">
+                    <label>Salary *</label>
+                    <input type="number" value={convertForm.salary} onChange={(e) => setConvertForm({ ...convertForm, salary: e.target.value })} required placeholder="e.g. 50000" />
+                  </div>
+                  <div className="tms-form-group">
+                    <label>Department *</label>
+                    <select value={convertForm.departmentId} onChange={(e) => setConvertForm({ ...convertForm, departmentId: e.target.value })} required>
+                      <option value="">Select Department</option>
+                      {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="tms-form-group">
+                    <label>Join Date *</label>
+                    <input type="date" value={convertForm.joinDate} onChange={(e) => setConvertForm({ ...convertForm, joinDate: e.target.value })} required />
+                  </div>
+                  <div className="tms-form-group">
+                    <label>Age *</label>
+                    <input type="number" value={convertForm.age} onChange={(e) => setConvertForm({ ...convertForm, age: e.target.value })} required placeholder="e.g. 25" min="18" max="70" />
+                  </div>
+                  <div className="tms-form-group">
+                    <label>Experience (years) *</label>
+                    <input type="number" value={convertForm.experience} onChange={(e) => setConvertForm({ ...convertForm, experience: e.target.value })} required placeholder="e.g. 3" min="0" />
+                  </div>
+                  <div className="tms-form-group">
+                    <label>Employment Type</label>
+                    <select value={convertForm.employmentType} onChange={(e) => setConvertForm({ ...convertForm, employmentType: e.target.value })}>
+                      <option value="PROBATION">Probation</option>
+                      <option value="FTE">Full-Time (FTE)</option>
+                      <option value="PTE">Part-Time (PTE)</option>
+                      <option value="CONSULTANT">Consultant</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="tms-form-actions">
+                  <button type="button" className="tms-btn tms-btn-secondary" onClick={() => setConvertModal(null)}>Cancel</button>
+                  <button type="submit" className="tms-btn tms-btn-primary"><UserPlus size={16} /> Create Employee</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Resume Table */}
       {loading ? <div className="tms-loading">Loading...</div> : (
         <div className="tms-table-wrapper">
@@ -423,6 +537,7 @@ export default function TmsUploadResume() {
                     <button title="Edit" onClick={() => handleEdit(r)}><Edit3 size={15} /></button>
                     <button title="Comments" onClick={() => openComments(r)}><MessageSquare size={15} /></button>
                     {canDelete && <button title="Delete" className="tms-delete-btn" onClick={() => handleDelete(r.id, `${r.firstName || ''} ${r.lastName || ''}`.trim() || r.fileName)}><Trash2 size={15} /></button>}
+                    {canConvert && r.status === 'HIRED' && <button title="Convert to Employee" className="tms-convert-btn" style={{ color: '#10b981' }} onClick={() => openConvertModal(r)}><UserPlus size={15} /></button>}
                   </td>
                 </tr>
               ))}

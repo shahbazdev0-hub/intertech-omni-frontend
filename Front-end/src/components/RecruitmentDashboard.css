@@ -233,7 +233,7 @@
 }
 
 .stat-card.stat-blue::before {
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  background: linear-gradient(135deg, #0C3D4A, #083038);
 }
 
 .stat-card.stat-green::before {
@@ -241,7 +241,7 @@
 }
 
 .stat-card.stat-purple::before {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  background: linear-gradient(135deg, #0C3D4A, #0a3039);
 }
 
 .stat-card.stat-orange::before {
@@ -455,12 +455,12 @@
 }
 
 .bulk-btn.btn-interview {
-  background: #8b5cf6;
+  background: #0C3D4A;
   color: white;
 }
 
 .bulk-btn.btn-email {
-  background: #3b82f6;
+  background: #0C3D4A;
   color: white;
 }
 

@@ -26,6 +26,13 @@ import TmsReports from './components/TmsReports';
 import TmsAuditLog from './components/TmsAuditLog';
 import TmsUserManagement from './components/TmsUserManagement';
 import TmsPermissions from './components/TmsPermissions';
+import TicketSubmit from './components/TicketSubmit';
+import TicketList from './components/TicketList';
+import TicketDetail from './components/TicketDetail';
+import TicketCategories from './components/TicketCategories';
+import TicketReports from './components/TicketReports';
+import TicketPermissions from './components/TicketPermissions';
+import PayrollPermissions from './components/PayrollPermissions';
 import './components/Tms.css';
 
 const LayoutWithSidebar = () => {
@@ -42,6 +49,8 @@ const LayoutWithSidebar = () => {
     }
     localStorage.removeItem('tmsUser');
     localStorage.removeItem('tmsPermissions');
+    localStorage.removeItem('ticketPermissions');
+    localStorage.removeItem('payrollPermissions');
     localStorage.removeItem('valid');
     navigate('/');
   };
@@ -86,6 +95,13 @@ const LayoutWithSidebar = () => {
             <Route path="/departments" element={<DepartmentManagement />} />
             <Route path="/settings" element={<SystemSettings />} />
             <Route path="/shifts" element={<ShiftManagement />} />
+            <Route path="/tickets" element={<TicketList />} />
+            <Route path="/tickets/submit" element={<TicketSubmit />} />
+            <Route path="/tickets/categories" element={<TicketCategories />} />
+            <Route path="/tickets/reports" element={<TicketReports />} />
+            <Route path="/tickets/permissions" element={<TicketPermissions />} />
+            <Route path="/payroll-permissions" element={<PayrollPermissions />} />
+            <Route path="/tickets/:id" element={<TicketDetail />} />
             <Route path="*" element={<div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}><h2>404 — Page Not Found</h2></div>} />
           </Routes>
         </div>

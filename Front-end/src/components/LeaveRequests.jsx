@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Calendar, User, Clock, CheckCircle, XCircle, Eye, Loader2, RefreshCw, Plus, DollarSign } from 'lucide-react';
+import { Search, Filter, Calendar, User, Clock, CheckCircle, XCircle, Eye, Loader2, RefreshCw, Plus, DollarSign, Trash2 } from 'lucide-react';
 import './LeaveRequests.css';
 import LeaveRequestDetailsModal from './LeaveRequestDetailsModal';
 
@@ -220,6 +220,41 @@ const LeaveRequests = () => {
 
   const isManager = sessionUser && ['SUPER_ADMIN', 'ADMIN', 'HR', 'HOD'].includes(sessionUser.role);
   const isHR = sessionUser && ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(sessionUser.role);
+  const isSuperAdmin = sessionUser?.role === 'SUPER_ADMIN';
+
+  // Update isPaid for a leave request
+  const handlePaidChange = async (requestId, isPaid) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/leave/${requestId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: leaveRequests.find(r => r.id === requestId)?.status || 'Pending', isPaid })
+      });
+      if (response.ok) await fetchLeaveRequests();
+    } catch (err) {
+      console.error('Error updating paid status:', err);
+    }
+  };
+
+  // Delete leave request (own pending requests or admin)
+  const handleDeleteLeave = async (requestId) => {
+    if (!window.confirm('Are you sure you want to delete this leave request?')) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/leave/${requestId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete');
+      }
+      await fetchLeaveRequests();
+      await fetchLeaveStats();
+    } catch (err) {
+      setError('Failed to delete leave request: ' + err.message);
+    }
+  };
 
   const ActionButton = ({ status, requestId, request }) => {
     const isLoading = actionLoading[requestId];
@@ -239,6 +274,9 @@ const LeaveRequests = () => {
         )}
         <button onClick={() => handleAction('details', requestId)} style={{ ...btnBase, backgroundColor: '#0C3D4A', color: 'white' }}>
           <Eye size={14} /> Details
+        </button>
+        <button onClick={() => handleDeleteLeave(requestId)} style={{ ...btnBase, backgroundColor: '#dc2626', color: 'white' }}>
+          <Trash2 size={14} /> Delete
         </button>
       </div>
     );
@@ -460,10 +498,21 @@ const LeaveRequests = () => {
                       </span>
                     </td>
                     <td className="table-cell">
-                      <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 600, background: request.isPaid !== false ? '#dcfce7' : '#fef3c7', color: request.isPaid !== false ? '#166534' : '#92400e', display: 'flex', alignItems: 'center', gap: '3px', width: 'fit-content' }}>
-                        <DollarSign size={10} />
-                        {request.isPaid !== false ? 'Paid' : 'Unpaid'}
-                      </span>
+                      {isSuperAdmin ? (
+                        <select
+                          value={request.isPaid !== false ? 'paid' : 'unpaid'}
+                          onChange={(e) => handlePaidChange(request.id, e.target.value === 'paid')}
+                          style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600, border: '1.5px solid #e2e8f0', background: request.isPaid !== false ? '#dcfce7' : '#fef3c7', color: request.isPaid !== false ? '#166534' : '#92400e', cursor: 'pointer' }}
+                        >
+                          <option value="paid">$ Paid</option>
+                          <option value="unpaid">Unpaid</option>
+                        </select>
+                      ) : (
+                        <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 600, background: request.isPaid !== false ? '#dcfce7' : '#fef3c7', color: request.isPaid !== false ? '#166534' : '#92400e', display: 'flex', alignItems: 'center', gap: '3px', width: 'fit-content' }}>
+                          <DollarSign size={10} />
+                          {request.isPaid !== false ? 'Paid' : 'Unpaid'}
+                        </span>
+                      )}
                     </td>
                     <td className="table-cell">
                       <span style={{ padding: '0.375rem 0.75rem', fontSize: '0.875rem', fontWeight: '600', borderRadius: '9999px', backgroundColor: request.status === 'Approved' ? '#dcfce7' : request.status === 'Declined' ? '#fee2e2' : '#fef3c7', color: request.status === 'Approved' ? '#166534' : request.status === 'Declined' ? '#991b1b' : '#92400e' }}>

@@ -29,8 +29,27 @@ const MyProfile = () => {
 
         setSessionUser(authData.user);
 
+        // TMS-only users don't have an employee record
+        if (authData.user.isTmsUser && authData.user.role !== 'SUPER_ADMIN') {
+          setError('Profile is only available for employee accounts.');
+          setLoading(false);
+          return;
+        }
+
+        // For TMS SUPER_ADMIN, find their employee record by email
+        let employeeId = authData.user.id;
+        if (authData.user.isTmsUser) {
+          const empRes = await fetch('http://localhost:5000/api/employees', { credentials: 'include' });
+          if (empRes.ok) {
+            const emps = await empRes.json();
+            const match = emps.find(e => e.email === authData.user.email);
+            if (match) employeeId = match.id;
+            else { setError('No employee record found for this account.'); setLoading(false); return; }
+          }
+        }
+
         // Fetch own employee record
-        const res = await fetch(`http://localhost:5000/api/employees/${authData.user.id}`, { credentials: 'include' });
+        const res = await fetch(`http://localhost:5000/api/employees/${employeeId}`, { credentials: 'include' });
         if (!res.ok) {
           const err = await res.json();
           throw new Error(err.error || 'Failed to load profile');
@@ -219,10 +238,6 @@ const MyProfile = () => {
           <span className="value">{formatDate(profile.joinDate)}</span>
         </div>
         <div className="employee-row">
-          <span className="label">Employment Type:</span>
-          <span className="value">{profile.employmentType}</span>
-        </div>
-        <div className="employee-row">
           <span className="label">Age:</span>
           {editing ? (
             <input
@@ -255,9 +270,7 @@ const MyProfile = () => {
         <div className="employee-row">
           <span className="label">Salary:</span>
           <span className="value">
-            {sessionUser?.role === 'GENERAL_USER'
-              ? '••••••'
-              : `$${profile.salary?.toLocaleString()}`}
+            {`$${profile.salary?.toLocaleString()}`}
           </span>
         </div>
       </div>

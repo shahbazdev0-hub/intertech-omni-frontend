@@ -359,7 +359,7 @@ const IndividualPayslip = ({ departments, currentUser }) => {
                   <table style={S.table}>
                     <thead>
                       <tr>
-                        {['Date','Status','Hours','OT','Break (min)','Break Type'].map(h => (
+                        {['Date','Status','Hours','OT','Break (min)','Breaks'].map(h => (
                           <th key={h} style={S.th}>{h}</th>
                         ))}
                       </tr>
@@ -372,7 +372,7 @@ const IndividualPayslip = ({ departments, currentUser }) => {
                           <td style={{...S.td, ...S.num}}>{a.totalHours ?? '—'}</td>
                           <td style={{...S.td, ...S.num}}>{a.overtime ?? 0}</td>
                           <td style={{...S.td, ...S.num}}>{a.breakMinutes ?? 0}</td>
-                          <td style={S.td}>{a.breakType || '—'}</td>
+                          <td style={S.td}>{a.breaks?.length > 0 ? a.breaks.map(b => `${b.breakType}${b.overrun ? '⚠' : ''}`).join(', ') : '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -426,8 +426,8 @@ const IndividualPayslip = ({ departments, currentUser }) => {
                       {slip.approvedOTDetail.map((o, i) => (
                         <tr key={i} style={i % 2 === 0 ? S.trEven : S.trOdd}>
                           <td style={S.td}>{fmtDate(o.date)}</td>
-                          <td style={{...S.td, ...S.num}}>{o.requestedHours}</td>
-                          <td style={S.td}>{o.amName || '—'}</td>
+                          <td style={{...S.td, ...S.num}}>{o.hours}</td>
+                          <td style={S.td}>{o.approvedBy || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -736,7 +736,7 @@ const S = {
   sel:         { padding: '9px 12px', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 14, background: 'white', cursor: 'pointer' },
   inp:         { padding: '9px 12px', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 14, background: 'white' },
   row2:        { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
-  btnPrimary:  { padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
+  btnPrimary:  { padding: '10px 20px', background: '#0C3D4A', color: 'white', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
   btnSuccess:  { padding: '10px 20px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
   btnSecondary:{ padding: '10px 20px', background: 'white', color: '#374151', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   alertErr:    { padding: '10px 14px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 6, color: '#dc2626', fontSize: 14, marginTop: 12 },
@@ -751,7 +751,7 @@ const S = {
   trEven:      { background: 'white' },
   trOdd:       { background: '#f8fafc' },
   card:        { background: 'white', borderRadius: 10, padding: 28, boxShadow: '0 1px 6px rgba(0,0,0,.08)' },
-  tabActive:   { padding: '8px 18px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
+  tabActive:   { padding: '8px 18px', background: '#0C3D4A', color: 'white', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   tabInactive: { padding: '8px 18px', background: 'white', color: '#374151', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   infoBox:     { background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: 20 },
   infoGrid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 },
@@ -788,15 +788,17 @@ const Salary = () => {
     }
   }, [currentUser]);
 
-  const isEmployee = currentUser?.role === 'GENERAL_USER';
-  const isAdminHR  = currentUser && ['SUPER_ADMIN','ADMIN','HR'].includes(currentUser.role);
-  const isAdmin    = currentUser && ['SUPER_ADMIN','ADMIN'].includes(currentUser.role);
+  const pp = JSON.parse(localStorage.getItem('payrollPermissions') || '[]');
+  const canCompute   = pp.includes('COMPUTE_PAYROLL');
+  const canViewSlip  = pp.includes('VIEW_OWN_PAYSLIP') || pp.includes('VIEW_ALL_PAYSLIPS');
+  const canAdjust    = pp.includes('ADJUST_SALARY');
+  const isEmployee   = !canCompute && !canAdjust;
 
-  // Build visible tabs for this role
+  // Build visible tabs based on permissions
   const tabs = [
-    isAdminHR && { label: 'Monthly Payroll',    id: 'monthly'    },
-    { label: 'Individual Payslip', id: 'payslip'    },
-    isAdmin   && { label: 'Salary Adjustment',  id: 'adjustment' },
+    canCompute  && { label: 'Monthly Payroll',    id: 'monthly'    },
+    canViewSlip && { label: 'Individual Payslip', id: 'payslip'    },
+    canAdjust   && { label: 'Salary Adjustment',  id: 'adjustment' },
   ].filter(Boolean);
 
   // Keep activeTab in bounds if role has fewer tabs
@@ -822,7 +824,7 @@ const Salary = () => {
           <button key={t.id} onClick={() => setActiveTab(i)}
             style={{
               flex: 1, padding: '10px 0', border: 'none', borderRadius: 7, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              background: safeTab === i ? '#3b82f6' : 'transparent',
+              background: safeTab === i ? '#0C3D4A' : 'transparent',
               color:      safeTab === i ? 'white'   : '#64748b',
               transition: 'all .15s',
             }}>

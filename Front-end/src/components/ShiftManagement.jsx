@@ -218,7 +218,7 @@ const AssignmentsTab = ({ isManager, sessionUser }) => {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [isManager]);
 
   const openAssign = (existing = null) => {
     setEditingAssignment(existing);

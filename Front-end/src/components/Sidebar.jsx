@@ -14,12 +14,16 @@ const Sidebar = ({ onLogout }) => {
   const location = useLocation();
 
   const [role, setRole] = useState(null);
+  const [isTmsUser, setIsTmsUser] = useState(false);
+  const [tmsPerms, setTmsPerms] = useState([]);
+  const [ticketPerms, setTicketPerms] = useState([]);
   const [expandedSections, setExpandedSections] = useState({
     employeeManagement: false,
     attendanceLeave: false,
     payrollCompensations: false,
     performance: false,
     talentManagement: false,
+    ticketSystem: false,
   });
 
   useEffect(() => {
@@ -27,7 +31,16 @@ const Sidebar = ({ onLogout }) => {
       try {
         const res = await fetch("http://localhost:5000/auth/status", { credentials: "include" });
         const data = await res.json();
-        if (data.loggedIn) setRole(data.user?.role);
+        if (data.loggedIn) {
+          setRole(data.user?.role);
+          setIsTmsUser(!!data.user?.isTmsUser);
+          // Load TMS permissions from localStorage
+          const perms = JSON.parse(localStorage.getItem('tmsPermissions') || '[]');
+          setTmsPerms(perms);
+          // Load ticket permissions from localStorage
+          const tPerms = JSON.parse(localStorage.getItem('ticketPermissions') || '[]');
+          setTicketPerms(tPerms);
+        }
       } catch (err) {
         console.error("Failed to get role:", err);
       }
@@ -42,8 +55,10 @@ const Sidebar = ({ onLogout }) => {
       ...prev,
       employeeManagement: ['/EmployeeList', '/departments', '/AdminProfile'].some(r => p.startsWith(r)) || p.startsWith('/employee/'),
       attendanceLeave: ['/attendance', '/leave-requests', '/shifts'].some(r => p.startsWith(r)),
-      payrollCompensations: ['/Salary', '/overtime'].some(r => p.startsWith(r)),
+      ticketSystem: p.startsWith('/tickets'),
+      payrollCompensations: ['/Salary', '/overtime', '/payroll-permissions'].some(r => p.startsWith(r)),
       performance: ['/EmployeeGoals', '/PerformanceReview'].some(r => p.startsWith(r)),
+      talentManagement: p.startsWith('/tms'),
       recruitment: ['/Candidates', '/JobPostings'].some(r => p.startsWith(r)),
     }));
   }, [location.pathname]);
@@ -63,6 +78,13 @@ const Sidebar = ({ onLogout }) => {
   const sectionActive = (...paths) =>
     paths.some(p => location.pathname.startsWith(p));
 
+  // TMS SUPER_ADMIN gets full access to all modules
+  // IT_SUPPORT sees only Ticket System
+  // Other TMS roles (HR_EXECUTIVE, HR_MANAGER, HOD) see only TMS features
+  const isItSupport = role === 'IT_SUPPORT';
+  const showEmployeeModules = !isTmsUser || role === 'SUPER_ADMIN';
+  const showTmsModules = isTmsUser && !isItSupport;  // IT Support does NOT see TMS
+
   return (
     <div className="sidebar">
       <div className="sidebar-brand">
@@ -73,16 +95,19 @@ const Sidebar = ({ onLogout }) => {
       <ul className="sidebar-menu">
 
         {/* Dashboard */}
+        {showEmployeeModules && (
         <li className={`menu-item${isActive('/dashboard') ? ' active' : ''}`}>
           <Link to="/dashboard">
             <MdDashboardCustomize className="menu-icon" />
             <span>Dashboard</span>
           </Link>
         </li>
+        )}
 
         <li className="menu-divider"><span>MODULES</span></li>
 
         {/* Employee Management */}
+        {showEmployeeModules && (
         <li className="menu-section">
           <div
             className={`menu-section-header${sectionActive('/EmployeeList', '/departments', '/AdminProfile', '/employee/') ? ' section-active' : ''}`}
@@ -110,8 +135,10 @@ const Sidebar = ({ onLogout }) => {
             </ul>
           )}
         </li>
+        )}
 
         {/* Attendance & Leave */}
+        {showEmployeeModules && (
         <li className="menu-section">
           <div
             className={`menu-section-header${sectionActive('/attendance', '/leave-requests', '/shifts') ? ' section-active' : ''}`}
@@ -140,12 +167,21 @@ const Sidebar = ({ onLogout }) => {
             </ul>
           )}
         </li>
+        )}
 
-        {/* Payroll — hidden from GENERAL_USER */}
-        {['SUPER_ADMIN','ADMIN','HR','HOD'].includes(role) && (
+        {/* Payroll & Compensation */}
+        {showEmployeeModules && (() => {
+          const pp = JSON.parse(localStorage.getItem('payrollPermissions') || '[]');
+          const hasAnyPayroll = pp.length > 0;
+          const canViewPayslip = pp.includes('VIEW_OWN_PAYSLIP') || pp.includes('VIEW_ALL_PAYSLIPS');
+          const canCompute = pp.includes('COMPUTE_PAYROLL') || pp.includes('GENERATE_PAYROLL') || pp.includes('EXPORT_PAYROLL') || pp.includes('ADJUST_SALARY');
+          const canViewOT = pp.includes('VIEW_OVERTIME');
+          const canManagePerms = pp.includes('MANAGE_PAYROLL_PERMISSIONS');
+          if (!hasAnyPayroll) return null;
+          return (
           <li className="menu-section">
             <div
-              className={`menu-section-header${sectionActive('/Salary', '/overtime') ? ' section-active' : ''}`}
+              className={`menu-section-header${sectionActive('/Salary', '/overtime', '/payroll-permissions') ? ' section-active' : ''}`}
               onClick={() => toggleSection("payrollCompensations")}
             >
               <MdPayments className="menu-icon" />
@@ -156,20 +192,34 @@ const Sidebar = ({ onLogout }) => {
             </div>
             {expandedSections.payrollCompensations && (
               <ul className="submenu">
-                {['SUPER_ADMIN','ADMIN','HR'].includes(role) && (
+                {canCompute && (
                   <li className={`submenu-item${isActive('/Salary') ? ' active' : ''}`}>
                     <Link to="/Salary">Salary Management</Link>
                   </li>
                 )}
-                <li className={`submenu-item${isActive('/overtime') ? ' active' : ''}`}>
-                  <Link to="/overtime">Overtime Tracking</Link>
-                </li>
+                {!canCompute && canViewPayslip && (
+                  <li className={`submenu-item${isActive('/Salary') ? ' active' : ''}`}>
+                    <Link to="/Salary">My Payslip</Link>
+                  </li>
+                )}
+                {canViewOT && (
+                  <li className={`submenu-item${isActive('/overtime') ? ' active' : ''}`}>
+                    <Link to="/overtime">Overtime Tracking</Link>
+                  </li>
+                )}
+                {canManagePerms && (
+                  <li className={`submenu-item${isActive('/payroll-permissions') ? ' active' : ''}`}>
+                    <Link to="/payroll-permissions">Payroll Permissions</Link>
+                  </li>
+                )}
               </ul>
             )}
           </li>
-        )}
+          );
+        })()}
 
         {/* Performance */}
+        {showEmployeeModules && (
         <li className="menu-section">
           <div
             className={`menu-section-header${sectionActive('/EmployeeGoals', '/PerformanceReview') ? ' section-active' : ''}`}
@@ -192,58 +242,101 @@ const Sidebar = ({ onLogout }) => {
             </ul>
           )}
         </li>
-
+        )}
 
 {/* Talent Management */}
-        {(() => {
-          const tmsPerms = JSON.parse(localStorage.getItem('tmsPermissions') || '[]');
-          const hasTms = tmsPerms.length > 0;
-          if (!hasTms) return null;
-          return (
+        {showTmsModules && tmsPerms.length > 0 && (
         <li className="menu-section">
-          <div className="menu-section-header" onClick={() => toggleSection("talentManagement")}>
-            <MdPayments style={{ marginRight: '13px', fontSize: '24px' }} />
-             <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Talent Management</span>
-             <i className={`bi bi-chevron-${expandedSections.talentManagement ? "down" : "right"} chevron`}></i>
-           </div>
-           {expandedSections.talentManagement && (
-             <ul className="submenu">
-               {tmsPerms.includes('UPLOAD_RESUME') && (
-               <li className="submenu-item">
-                 <Link to="/tms/upload-resume" style={{ textDecoration: 'none', color: 'inherit' }}>Upload Resume</Link>
+          <div
+            className={`menu-section-header${sectionActive('/tms') ? ' section-active' : ''}`}
+            onClick={() => toggleSection("talentManagement")}
+          >
+            <MdPayments className="menu-icon" />
+            <span>Talent Management</span>
+            {expandedSections.talentManagement
+              ? <MdExpandMore className="chevron" />
+              : <MdChevronRight className="chevron" />}
+          </div>
+          {expandedSections.talentManagement && (
+            <ul className="submenu">
+              {tmsPerms.includes('UPLOAD_RESUME') && (
+              <li className={`submenu-item${isActive('/tms/upload-resume') ? ' active' : ''}`}>
+                <Link to="/tms/upload-resume">Upload Resume</Link>
               </li>
-               )}
-              <li className="submenu-item">
-                <Link to="/tms/folders" style={{ textDecoration: 'none', color: 'inherit' }}>Talent Management</Link>
+              )}
+              <li className={`submenu-item${isActive('/tms/folders') ? ' active' : ''}`}>
+                <Link to="/tms/folders">Talent Management</Link>
               </li>
               {tmsPerms.includes('VIEW_REPORTS') && (
-              <li className="submenu-item">
-                <Link to="/tms/reports" style={{ textDecoration: 'none', color: 'inherit' }}>TMS Reports</Link>
+              <li className={`submenu-item${isActive('/tms/reports') ? ' active' : ''}`}>
+                <Link to="/tms/reports">TMS Reports</Link>
               </li>
               )}
               {tmsPerms.includes('VIEW_AUDIT_LOG') && (
-              <li className="submenu-item">
-                <Link to="/tms/audit" style={{ textDecoration: 'none', color: 'inherit' }}>Audit Log</Link>
+              <li className={`submenu-item${isActive('/tms/audit') ? ' active' : ''}`}>
+                <Link to="/tms/audit">Audit Log</Link>
               </li>
               )}
               {(tmsPerms.includes('MANAGE_USERS') || tmsPerms.includes('RESET_PASSWORD') || tmsPerms.includes('MANAGE_DESIGNATIONS')) && (
-              <li className="submenu-item">
-                <Link to="/tms/user-management" style={{ textDecoration: 'none', color: 'inherit' }}>User Management</Link>
+              <li className={`submenu-item${isActive('/tms/user-management') ? ' active' : ''}`}>
+                <Link to="/tms/user-management">User Management</Link>
               </li>
               )}
               {tmsPerms.includes('MANAGE_PERMISSIONS') && (
-              <li className={`submenu-item${isActive('/JobPostings') ? ' active' : ''}`}>
+              <li className={`submenu-item${isActive('/tms/permissions') ? ' active' : ''}`}>
                 <Link to="/tms/permissions">Permissions</Link>
               </li>
-                )}
-          </ul>
+              )}
+            </ul>
           )}
         </li>
-          );
-        })()}
+        )}
+
+        {/* Ticket System */}
+        {ticketPerms.length > 0 && (
+        <li className="menu-section">
+          <div
+            className={`menu-section-header${sectionActive('/tickets') ? ' section-active' : ''}`}
+            onClick={() => toggleSection("ticketSystem")}
+          >
+            <MdFeaturedPlayList className="menu-icon" />
+            <span>Ticket System</span>
+            {expandedSections.ticketSystem
+              ? <MdExpandMore className="chevron" />
+              : <MdChevronRight className="chevron" />}
+          </div>
+          {expandedSections.ticketSystem && (
+            <ul className="submenu">
+              {ticketPerms.includes('SUBMIT_TICKET') && (
+              <li className={`submenu-item${isActive('/tickets/submit') ? ' active' : ''}`}>
+                <Link to="/tickets/submit">Submit Ticket</Link>
+              </li>
+              )}
+              <li className={`submenu-item${isActive('/tickets') && !isActive('/tickets/submit') && !isActive('/tickets/categories') && !isActive('/tickets/reports') && !isActive('/tickets/permissions') ? ' active' : ''}`}>
+                <Link to="/tickets">All Tickets</Link>
+              </li>
+              {ticketPerms.includes('MANAGE_CATEGORIES') && (
+              <li className={`submenu-item${isActive('/tickets/categories') ? ' active' : ''}`}>
+                <Link to="/tickets/categories">Categories</Link>
+              </li>
+              )}
+              {ticketPerms.includes('VIEW_TICKET_REPORTS') && (
+              <li className={`submenu-item${isActive('/tickets/reports') ? ' active' : ''}`}>
+                <Link to="/tickets/reports">Reports</Link>
+              </li>
+              )}
+              {ticketPerms.includes('MANAGE_TICKET_PERMISSIONS') && (
+              <li className={`submenu-item${isActive('/tickets/permissions') ? ' active' : ''}`}>
+                <Link to="/tickets/permissions">Permissions</Link>
+              </li>
+              )}
+            </ul>
+          )}
+        </li>
+        )}
 
         {/* Reporting — Super Admin, Admin, HR */}
-        {['SUPER_ADMIN','ADMIN','HR'].includes(role) && (
+        {showEmployeeModules && ['SUPER_ADMIN','ADMIN','HR'].includes(role) && (
           <li className={`menu-item${isActive('/dashboard') ? ' active' : ''}`}>
             <Link to="/dashboard">
               <MdFeaturedPlayList className="menu-icon" />
@@ -253,7 +346,7 @@ const Sidebar = ({ onLogout }) => {
         )}
 
         {/* System Settings — Super Admin only */}
-        {role === 'SUPER_ADMIN' && (
+        {showEmployeeModules && role === 'SUPER_ADMIN' && (
           <li className={`menu-item${isActive('/settings') ? ' active' : ''}`}>
             <Link to="/settings">
               <MdOutlineSystemUpdateAlt className="menu-icon" />

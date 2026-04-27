@@ -56,17 +56,19 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
     } catch (error) { console.error('Auto checkout failed:', error); }
   };
 
+  // Find the active (unfinished) break from the breaks array
+  const activeBreakRecord = currentAttendance?.breaks?.find(b => !b.endTime);
+  const activeBreakTypeKey = activeBreakRecord?.breakType || 'SHORT';
+
   // Update break countdown every second
   useEffect(() => {
-    if (currentAttendance?.status === 'ON_BREAK' && currentAttendance?.breakStart) {
-      const breakType = currentAttendance.breakType || 'SHORT';
-      const config = BREAK_TYPES[breakType];
+    if (currentAttendance?.status === 'ON_BREAK' && activeBreakRecord) {
+      const config = BREAK_TYPES[activeBreakTypeKey];
 
       if (breakIntervalRef.current) clearInterval(breakIntervalRef.current);
 
       breakIntervalRef.current = setInterval(() => {
-        const elapsed = Math.floor((getCurrentTime() - new Date(currentAttendance.breakStart)) / 1000);
-        const elapsedMinutes = Math.floor(elapsed / 60);
+        const elapsed = Math.floor((getCurrentTime() - new Date(activeBreakRecord.startTime)) / 1000);
 
         if (config.minutes !== null) {
           const remaining = config.minutes * 60 - elapsed;
@@ -87,7 +89,7 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
       setBreakOverrunAlert(false);
     }
     return () => { if (breakIntervalRef.current) clearInterval(breakIntervalRef.current); };
-  }, [currentAttendance?.status, currentAttendance?.breakStart]);
+  }, [currentAttendance?.status, activeBreakRecord?.id]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -103,8 +105,8 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
       const checkInTime = new Date(currentAttendance.checkInTime);
       const now = getCurrentTime();
       let endTime = now;
-      if (currentAttendance.status === 'ON_BREAK' && currentAttendance.breakStart) {
-        endTime = new Date(currentAttendance.breakStart);
+      if (currentAttendance.status === 'ON_BREAK' && activeBreakRecord) {
+        endTime = new Date(activeBreakRecord.startTime);
       }
       const diff = endTime - checkInTime;
       const breakTime = (currentAttendance.breakMinutes || 0) * 60 * 1000;
@@ -219,8 +221,9 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
     const result = await makeAttendanceCall('break/start', { breakType: selectedBreakType });
     setShowBreakModal(false);
     if (result.success) {
+      await fetchCurrentAttendance(); // re-fetch to get updated breaks array
       const cfg = BREAK_TYPES[selectedBreakType];
-      alert(`${cfg.label} started! ${cfg.minutes ? `You have ${cfg.desc}.` : 'No time limit.'}`);
+      alert(`${cfg.label} started (Break #${result.data.breakNumber})! ${cfg.minutes ? `You have ${cfg.desc}.` : 'No time limit.'}`);
     } else {
       alert(result.error || 'Failed to start break');
     }
@@ -229,19 +232,24 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
   const handleBreakEnd = async () => {
     const result = await makeAttendanceCall('break/end');
     if (result.success) {
-      const { breakDuration, isOverrun, overrunMinutes, breakType, allowedMinutes } = result.data;
+      await fetchCurrentAttendance(); // re-fetch to get updated breaks array
+      const { breakDuration, isOverrun, overrunMinutes, breakType, totalBreaksToday, totalBreakMinutes } = result.data;
       const cfg = BREAK_TYPES[breakType] || {};
+      let msg = `Break ended! Duration: ${breakDuration} min (${cfg.label || breakType})`;
+      msg += `\nBreaks today: ${totalBreaksToday} | Total break time: ${totalBreakMinutes} min`;
       if (isOverrun) {
-        alert(`Break ended.\nDuration: ${breakDuration} min (${cfg.label || breakType})\n⚠️ Overrun by ${overrunMinutes} minutes — excess time flagged for salary deduction.`);
-      } else {
-        alert(`Break ended! Duration: ${breakDuration} minutes (${cfg.label || breakType}).`);
+        msg += `\n⚠️ Overrun by ${overrunMinutes} minutes — excess time flagged for salary deduction.`;
       }
+      alert(msg);
     } else {
       alert(result.error || 'Failed to end break');
     }
   };
 
-  const formatTime = (date) => date ? new Date(date).toLocaleTimeString() : '--:--:--';
+  const formatTime = (date) => {
+    if (!date) return '--:--:--';
+    return new Date(date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  };
 
   const formatSeconds = (totalSecs) => {
     const m = Math.floor(Math.abs(totalSecs) / 60);
@@ -293,7 +301,8 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
 
   const statusBadge = currentAttendance?.status ? getStatusBadge(currentAttendance.status) : null;
   const workProgress = getWorkProgress();
-  const activeBreakType = currentAttendance?.breakType ? BREAK_TYPES[currentAttendance.breakType] : null;
+  const activeBreakType = activeBreakRecord ? BREAK_TYPES[activeBreakTypeKey] : null;
+  const completedBreaks = currentAttendance?.breaks?.filter(b => b.endTime) || [];
 
   return (
     <div className="attendance-tracker-card">
@@ -324,8 +333,10 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
         <h3>Smart Attendance Tracker</h3>
         <div className="current-time">
           <span className="time-label">Current Time</span>
-          <span className="time-display">{currentTime.toLocaleTimeString()}</span>
-          <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>Max: {BUSINESS_CONFIG.MAX_TOTAL_HOURS}h/day</div>
+          <span className="time-display">{currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
+          <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>
+            Office: {BUSINESS_CONFIG.WORK_START_TIME} – {BUSINESS_CONFIG.AUTO_CHECKOUT_TIME} | Max: {BUSINESS_CONFIG.MAX_TOTAL_HOURS}h/day
+          </div>
         </div>
       </div>
 
@@ -391,19 +402,41 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
                 </div>
               )}
 
-              {currentAttendance.totalHours && (
+              {currentAttendance.totalHours != null && (
                 <div className="time-row">
                   <span>Total Hours:</span>
-                  <span className="time-value">{currentAttendance.totalHours.toFixed(2)} hrs</span>
+                  <span className="time-value" style={{ fontWeight: 700, color: '#0C3D4A' }}>
+                    {Math.floor(currentAttendance.totalHours)}h {Math.round((currentAttendance.totalHours % 1) * 60)}m
+                    <span style={{ fontWeight: 400, color: '#64748b', marginLeft: 4, fontSize: '0.85em' }}>
+                      ({currentAttendance.totalHours.toFixed(2)} hrs)
+                    </span>
+                  </span>
                 </div>
               )}
-              {currentAttendance.breakMinutes > 0 && (
-                <div className="time-row">
-                  <span>Break Time:</span>
-                  <span className="time-value">
-                    {currentAttendance.breakMinutes} mins
-                    {currentAttendance.breakOverrun && <span style={{ color: '#ef4444', marginLeft: '6px', fontSize: '0.75rem' }}>⚠ Overrun</span>}
-                  </span>
+              {(currentAttendance.breakMinutes > 0 || completedBreaks.length > 0) && (
+                <div className="time-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <span>Breaks ({completedBreaks.length}):</span>
+                    <span className="time-value">
+                      {currentAttendance.breakMinutes || 0} mins total
+                      {currentAttendance.breakOverrun && <span style={{ color: '#ef4444', marginLeft: '6px', fontSize: '0.75rem' }}>⚠ Overrun</span>}
+                    </span>
+                  </div>
+                  {completedBreaks.length > 0 && (
+                    <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                      {completedBreaks.map((b, i) => {
+                        const cfg = BREAK_TYPES[b.breakType] || BREAK_TYPES.SHORT;
+                        return (
+                          <span key={b.id} style={{
+                            fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px',
+                            background: `${cfg.color}15`, color: cfg.color, fontWeight: 600
+                          }}>
+                            {cfg.label}: {b.duration}m{b.overrun ? ' ⚠' : ''}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               {currentAttendance.overtime > 0 && (

@@ -190,15 +190,7 @@ const EmployeeList = () => {
           <button onClick={exportCSV} className="btn btn-outline">
             <FaFileExport /> Export CSV
           </button>
-          {isHROrAbove && (
-            <button
-              onClick={handleCheckPromotions}
-              className="btn btn-outline"
-              title="Promote PROBATION employees who have completed 3 months"
-            >
-              🎓 Check Promotions
-            </button>
-          )}
+          {/* Check Promotions button removed */}
           {isAdmin && (
             <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
               <FaPlus /> Add Employee
