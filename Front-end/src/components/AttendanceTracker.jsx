@@ -14,6 +14,7 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [sessionTime, setSessionTime] = useState('00:00:00');
   const [autoCheckoutWarning, setAutoCheckoutWarning] = useState(false);
+  const [shiftInfo, setShiftInfo] = useState(null);
 
   // Break type modal state
   const [showBreakModal, setShowBreakModal] = useState(false);
@@ -24,11 +25,13 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
   const [breakOverrunAlert, setBreakOverrunAlert] = useState(false);
   const breakIntervalRef = useRef(null);
 
+  // Default config — overridden by shift info from API
   const BUSINESS_CONFIG = {
     STANDARD_WORK_HOURS: 8,
     MAX_OVERTIME_HOURS: 4,
     MAX_TOTAL_HOURS: 12,
-    WORK_START_TIME: '09:00',
+    WORK_START_TIME: shiftInfo?.shiftStart || '08:00',
+    WORK_END_TIME: shiftInfo?.shiftEnd || '17:00',
     AUTO_CHECKOUT_TIME: '21:00',
     LATE_THRESHOLD_MINUTES: 15
   };
@@ -130,9 +133,24 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
     } catch (error) { console.error('Error fetching attendance:', error); }
   };
 
+  // Fetch employee shift info (department-based timings)
+  const fetchShiftInfo = async () => {
+    if (!employeeId) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/attendance/shift-info/${employeeId}`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setShiftInfo(data);
+      }
+    } catch (err) {
+      console.error('Error fetching shift info:', err);
+    }
+  };
+
   useEffect(() => {
     if (employeeId) {
       fetchCurrentAttendance();
+      fetchShiftInfo();
       const midnight = new Date();
       midnight.setHours(24, 0, 0, 0);
       setTimeout(() => { fetchCurrentAttendance(); onAttendanceUpdate && onAttendanceUpdate(); }, midnight - new Date());
@@ -195,7 +213,17 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
   const handleCheckIn = async () => {
     const result = await makeAttendanceCall('checkin');
     if (result.success) {
-      alert(`Check-in successful!${result.data.isLate ? ' (Late arrival noted)' : ''}`);
+      let msg = 'Check-in successful!';
+      if (result.data.isLate) {
+        const mins = result.data.lateMinutes || 0;
+        if (mins >= 120) {
+          msg += ` (Late by ${mins} min — half-day deduction applies)`;
+        } else {
+          msg += ` (Late by ${mins} min)`;
+        }
+      }
+      if (result.data.isTechnical) msg += ' [Technical — no late penalty]';
+      alert(msg);
     } else {
       alert(result.error || 'Check-in failed');
     }
@@ -335,7 +363,12 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
           <span className="time-label">Current Time</span>
           <span className="time-display">{currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
           <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>
-            Office: {BUSINESS_CONFIG.WORK_START_TIME} – {BUSINESS_CONFIG.AUTO_CHECKOUT_TIME} | Max: {BUSINESS_CONFIG.MAX_TOTAL_HOURS}h/day
+            Shift: {BUSINESS_CONFIG.WORK_START_TIME} – {BUSINESS_CONFIG.WORK_END_TIME}
+            {shiftInfo && (
+              <span style={{ marginLeft: '6px', color: shiftInfo.isTechnical ? '#3b82f6' : '#8b5cf6' }}>
+                ({shiftInfo.isTechnical ? 'Technical' : 'Non-Technical'})
+              </span>
+            )}
           </div>
         </div>
       </div>

@@ -26,7 +26,7 @@ const LeaveRequests = () => {
 
   // Submit leave request form
   const [showSubmitForm, setShowSubmitForm] = useState(false);
-  const [submitForm, setSubmitForm] = useState({ leaveType: 'Annual Leave', startDate: '', endDate: '', reason: '' });
+  const [submitForm, setSubmitForm] = useState({ leaveType: 'Casual Leave', startDate: '', endDate: '', reason: '' });
   const [submitError, setSubmitError] = useState('');
   const [submitLoading, setSubmitLoading] = useState(false);
 
@@ -197,7 +197,7 @@ const LeaveRequests = () => {
       const data = await res.json();
       if (!res.ok) { setSubmitError(data.error || 'Failed to submit leave request'); return; }
       setShowSubmitForm(false);
-      setSubmitForm({ leaveType: 'Annual Leave', startDate: '', endDate: '', reason: '' });
+      setSubmitForm({ leaveType: 'Casual Leave', startDate: '', endDate: '', reason: '' });
       await fetchLeaveRequests();
       await fetchLeaveStats();
     } catch (err) {
@@ -209,10 +209,12 @@ const LeaveRequests = () => {
 
   const getTypeColor = (type) => {
     const map = {
+      'Casual': '#10b981', 'Casual Leave': '#10b981',
+      'Medical': '#ef4444', 'Medical Leave': '#ef4444',
       'Sick': '#ef4444', 'Sick Leave': '#ef4444',
       'Emergency': '#f59e0b', 'Emergency Leave': '#f59e0b',
       'Maternity': '#8b5cf6', 'Maternity Leave': '#8b5cf6',
-      'Annual': '#10b981', 'Annual Leave': '#10b981',
+      'Annual': '#64748b', 'Annual Leave': '#64748b',
       'Paternity': '#3b82f6', 'Paternity Leave': '#3b82f6',
     };
     return map[type] || '#6b7280';
@@ -380,12 +382,17 @@ const LeaveRequests = () => {
                   <span style={{ padding: '2px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, background: '#e0f2fe', color: '#0369a1' }}>
                     {leaveBalance.employee?.employmentType || 'FTE'}
                   </span>
-                  {leaveBalance.isProbation && (
-                    <span style={{ padding: '2px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, background: '#fef3c7', color: '#92400e' }}>
-                      Probation — Unpaid Leave Only
+                  {leaveBalance.employee?.department && (
+                    <span style={{ padding: '2px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, background: leaveBalance.isTechnical ? '#dbeafe' : '#f3e8ff', color: leaveBalance.isTechnical ? '#1d4ed8' : '#7c3aed' }}>
+                      {leaveBalance.isTechnical ? 'Technical' : 'Non-Technical'}
                     </span>
                   )}
-                  <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Annual Entitlement: <strong>{leaveBalance.annualEntitlement} days</strong></span>
+                  {leaveBalance.isProbation && (
+                    <span style={{ padding: '2px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, background: '#fef3c7', color: '#92400e' }}>
+                      {leaveBalance.isTechnical ? 'Probation — No Leave Allowed' : `Probation — ${leaveBalance.probationMonths || 0} paid leave(s)`}
+                    </span>
+                  )}
+                  <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Casual Leave: <strong>{leaveBalance.annualEntitlement} days</strong></span>
                   <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Year: {leaveBalance.year}</span>
                 </div>
               </div>
@@ -625,7 +632,7 @@ const LeaveRequests = () => {
                 <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Leave Type *</label>
                 <select value={submitForm.leaveType} onChange={e => setSubmitForm(p => ({ ...p, leaveType: e.target.value }))}
                   style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1.5px solid #e2e8f0', borderRadius: '6px', fontSize: '0.875rem', boxSizing: 'border-box' }}>
-                  {['Annual Leave', 'Sick Leave', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave'].map(t => (
+                  {['Casual Leave', 'Medical Leave', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave'].map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>

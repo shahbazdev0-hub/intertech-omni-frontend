@@ -23,6 +23,7 @@ const Sidebar = ({ onLogout }) => {
     payrollCompensations: false,
     performance: false,
     talentManagement: false,
+    documentManagement: false,
     ticketSystem: false,
   });
 
@@ -54,7 +55,8 @@ const Sidebar = ({ onLogout }) => {
     setExpandedSections(prev => ({
       ...prev,
       employeeManagement: ['/EmployeeList', '/departments', '/AdminProfile'].some(r => p.startsWith(r)) || p.startsWith('/employee/'),
-      attendanceLeave: ['/attendance', '/leave-requests', '/shifts'].some(r => p.startsWith(r)),
+      attendanceLeave: ['/attendance', '/leave-requests', '/shifts', '/holidays'].some(r => p.startsWith(r)),
+      documentManagement: p.startsWith('/documents'),
       ticketSystem: p.startsWith('/tickets'),
       payrollCompensations: ['/Salary', '/overtime', '/payroll-permissions'].some(r => p.startsWith(r)),
       performance: ['/EmployeeGoals', '/PerformanceReview'].some(r => p.startsWith(r)),
@@ -164,13 +166,18 @@ const Sidebar = ({ onLogout }) => {
                   Shift Management
                 </Link>
               </li>
+              {['SUPER_ADMIN','ADMIN','HR'].includes(role) && (
+              <li className={`submenu-item${isActive('/holidays') ? ' active' : ''}`}>
+                <Link to="/holidays">Holidays</Link>
+              </li>
+              )}
             </ul>
           )}
         </li>
         )}
 
         {/* Payroll & Compensation */}
-        {showEmployeeModules && (() => {
+        {(() => {
           const pp = JSON.parse(localStorage.getItem('payrollPermissions') || '[]');
           const hasAnyPayroll = pp.length > 0;
           const canViewPayslip = pp.includes('VIEW_OWN_PAYSLIP') || pp.includes('VIEW_ALL_PAYSLIPS');
@@ -292,6 +299,40 @@ const Sidebar = ({ onLogout }) => {
         </li>
         )}
 
+        {/* Document Management */}
+        {(() => {
+          const dp = JSON.parse(localStorage.getItem('documentPermissions') || '[]');
+          const hasAnyDoc = dp.length > 0;
+          const canManageDocPerms = dp.includes('MANAGE_DOCUMENT_PERMISSIONS');
+          if (!hasAnyDoc) return null;
+          return (
+          <li className="menu-section">
+            <div
+              className={`menu-section-header${sectionActive('/documents') ? ' section-active' : ''}`}
+              onClick={() => toggleSection("documentManagement")}
+            >
+              <MdFeaturedPlayList className="menu-icon" />
+              <span>Document Management</span>
+              {expandedSections.documentManagement
+                ? <MdExpandMore className="chevron" />
+                : <MdChevronRight className="chevron" />}
+            </div>
+            {expandedSections.documentManagement && (
+              <ul className="submenu">
+                <li className={`submenu-item${isActive('/documents') && !isActive('/documents/permissions') ? ' active' : ''}`}>
+                  <Link to="/documents">Documents</Link>
+                </li>
+                {canManageDocPerms && (
+                <li className={`submenu-item${isActive('/documents/permissions') ? ' active' : ''}`}>
+                  <Link to="/documents/permissions">Permissions</Link>
+                </li>
+                )}
+              </ul>
+            )}
+          </li>
+          );
+        })()}
+
         {/* Ticket System */}
         {ticketPerms.length > 0 && (
         <li className="menu-section">
@@ -341,6 +382,16 @@ const Sidebar = ({ onLogout }) => {
             <Link to="/dashboard">
               <MdFeaturedPlayList className="menu-icon" />
               <span>Reports</span>
+            </Link>
+          </li>
+        )}
+
+        {/* Event Ticker — Super Admin only */}
+        {role === 'SUPER_ADMIN' && (
+          <li className={`menu-item${isActive('/event-ticker') ? ' active' : ''}`}>
+            <Link to="/event-ticker">
+              <MdFeaturedPlayList className="menu-icon" />
+              <span>Event Ticker</span>
             </Link>
           </li>
         )}

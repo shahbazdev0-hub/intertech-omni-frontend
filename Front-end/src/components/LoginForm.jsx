@@ -31,6 +31,7 @@ const LoginForm = () => {
           localStorage.setItem('tmsPermissions', JSON.stringify(data.user.permissions || []));
           localStorage.setItem('ticketPermissions', JSON.stringify(data.user.ticketPermissions || []));
           localStorage.setItem('payrollPermissions', JSON.stringify(data.user.payrollPermissions || []));
+          localStorage.setItem('documentPermissions', JSON.stringify(data.user.documentPermissions || []));
           // IT Support goes to Ticket System, other TMS users go to TMS module
           if (data.user.isItSupport) {
             navigate('/tickets');
@@ -41,6 +42,7 @@ const LoginForm = () => {
           // Store ticket permissions for employee users
           localStorage.setItem('ticketPermissions', JSON.stringify(data.user.ticketPermissions || []));
           localStorage.setItem('payrollPermissions', JSON.stringify(data.user.payrollPermissions || []));
+          localStorage.setItem('documentPermissions', JSON.stringify(data.user.documentPermissions || []));
           navigate('/EmployeeList');
         }
       } else {

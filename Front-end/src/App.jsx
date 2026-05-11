@@ -33,6 +33,11 @@ import TicketCategories from './components/TicketCategories';
 import TicketReports from './components/TicketReports';
 import TicketPermissions from './components/TicketPermissions';
 import PayrollPermissions from './components/PayrollPermissions';
+import DocumentManagement from './components/DocumentManagement';
+import DocumentPermissions from './components/DocumentPermissions';
+import EventTickerBar from './components/EventTickerBar';
+import EventTickerManagement from './components/EventTickerManagement';
+import HolidayManagement from './components/HolidayManagement';
 import './components/Tms.css';
 
 const LayoutWithSidebar = () => {
@@ -51,6 +56,7 @@ const LayoutWithSidebar = () => {
     localStorage.removeItem('tmsPermissions');
     localStorage.removeItem('ticketPermissions');
     localStorage.removeItem('payrollPermissions');
+    localStorage.removeItem('documentPermissions');
     localStorage.removeItem('valid');
     navigate('/');
   };
@@ -60,6 +66,7 @@ const LayoutWithSidebar = () => {
       <Sidebar onLogout={handleLogout} />
 
       <div className="main-dashboard">
+        <EventTickerBar />
         <div className="top-navigation">
           <div className="nav-links">
             <button className="nav-link logout-btn" onClick={() => navigate('/')}>
@@ -95,12 +102,16 @@ const LayoutWithSidebar = () => {
             <Route path="/departments" element={<DepartmentManagement />} />
             <Route path="/settings" element={<SystemSettings />} />
             <Route path="/shifts" element={<ShiftManagement />} />
+            <Route path="/holidays" element={<HolidayManagement />} />
             <Route path="/tickets" element={<TicketList />} />
             <Route path="/tickets/submit" element={<TicketSubmit />} />
             <Route path="/tickets/categories" element={<TicketCategories />} />
             <Route path="/tickets/reports" element={<TicketReports />} />
             <Route path="/tickets/permissions" element={<TicketPermissions />} />
             <Route path="/payroll-permissions" element={<PayrollPermissions />} />
+            <Route path="/documents" element={<DocumentManagement />} />
+            <Route path="/documents/permissions" element={<DocumentPermissions />} />
+            <Route path="/event-ticker" element={<EventTickerManagement />} />
             <Route path="/tickets/:id" element={<TicketDetail />} />
             <Route path="*" element={<div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}><h2>404 — Page Not Found</h2></div>} />
           </Routes>

@@ -701,7 +701,6 @@ const EmployeeGoals = () => {
               <th onClick={() => handleSort('progress')} className="sortable">
                 Progress {sortConfig.key === 'progress' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
-              <th>Alerts</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -731,7 +730,6 @@ const EmployeeGoals = () => {
                   <td>{getPriorityIndicator(goal.priority)}</td>
                   <td>{getStatusBadge(goal.status)}</td>
                   <td>{getProgressBar(goal.progress)}</td>
-                  <td>{getDueDateAlert(goal.deadline, goal.status)}</td>
                   <td>
                     {canUpdateGoal(goal) && (
                       <button
