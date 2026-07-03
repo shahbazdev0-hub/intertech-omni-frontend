@@ -4,9 +4,7 @@ node_modules/
 .pnp.js
 
 # Build outputs
-dist/
 dist-ssr/
-build/
 out/
 
 # Vite
@@ -61,3 +59,6 @@ coverage/
 # Misc
 *.tsbuildinfo
 .sixth/
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
