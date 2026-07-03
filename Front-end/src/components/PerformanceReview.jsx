@@ -6,6 +6,7 @@ import {
   Download, Upload, BarChart3, TrendingUp, Eye, Edit, Trash2,
   CheckSquare, Square, MoreHorizontal, Loader
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import './PerformanceReview.css';
 
 const PerformanceReview = () => {
@@ -56,7 +57,8 @@ const PerformanceReview = () => {
   const navigate = useNavigate();
 
   // API Base URL
-  const API_BASE = 'http://localhost:5000/api';
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API_BASE = `${API_URL}/api`;
 
   // Generate monthly period options (Jan 2025 → Dec 2026)
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -71,7 +73,7 @@ const PerformanceReview = () => {
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch('http://localhost:5000/auth/status', { credentials: 'include' });
+        const r = await fetch(`${API_URL}/auth/status`, { credentials: 'include' });
         const j = await r.json();
 
         if (!j.loggedIn) {
@@ -282,6 +284,23 @@ const PerformanceReview = () => {
     }
   };
 
+  const handleBulkExportExcel = () => {
+    if (selectedReviews.size > 0) {
+      const selected = reviews.filter(r => selectedReviews.has(r.id));
+      const headers = ['Employee', 'Department', 'Position', 'Rating', 'Review Date', 'Review Period', 'Feedback', 'Goals'];
+      const rows = selected.map(r => [
+        r.employee?.name || '', r.employee?.department?.name || '', r.employee?.position || '',
+        r.rating, r.reviewDate ? new Date(r.reviewDate).toLocaleDateString() : '', r.reviewPeriod,
+        r.feedback || '', r.goals || ''
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Performance Reviews');
+      XLSX.writeFile(wb, 'performance_reviews.xlsx');
+      alert(`${selectedReviews.size} reviews exported to Excel`);
+    }
+  };
+
   const handleAddReview = async () => {
     const { employeeId, rating, feedback, reviewDate, reviewPeriod, goals } = reviewData;
     
@@ -429,13 +448,15 @@ const PerformanceReview = () => {
   if (!authChecked) return null;
 
   // Role-based permissions
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
+  const pp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const hpp = Object.keys(pp).length > 0;
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN' || (hpp && pp.performance_reviews);
   const isTeamLead = role === 'HOD' || role === 'HR';
   const canManageReviews = isAdmin;                      // Only admins can Add/Edit/Delete
   const canViewAnalytics = isAdmin || isTeamLead;        // Admins + HR/HOD can see analytics
-  const canExport = isAdmin || role === 'HR';            // Admins + HR can export
+  const canExport = isAdmin || role === 'HR' || isAdmin; // Admins + HR can export
   const canBulkSelect = isAdmin || canExport;            // Only roles that can do bulk actions
-  const isEmployee = role === 'GENERAL_USER';
+  const isEmployee = role === 'GENERAL_USER' && !hpp;
   const canSeeAllFilters = !isEmployee;                  // Employees don't need dept/rating/search filters
 
   if (loading && reviews.length === 0) {
@@ -692,9 +713,14 @@ const PerformanceReview = () => {
               <span className="muted">{selectedReviews.size} selected</span>
               <div className="row gap-sm">
                 {canExport && (
+                <>
                 <button onClick={handleBulkExport} className="btn btn-success btn-sm">
-                  <Download size={14} /> <span>Export</span>
+                  <Download size={14} /> <span>CSV</span>
                 </button>
+                <button onClick={handleBulkExportExcel} className="btn btn-success btn-sm" style={{ backgroundColor: '#059669' }}>
+                  <Download size={14} /> <span>Excel</span>
+                </button>
+                </>
                 )}
                 {canManageReviews && (
                 <button onClick={handleBulkDelete} className="btn btn-danger btn-sm">

@@ -32,13 +32,17 @@ const LeaveRequests = () => {
 
   // Leave balance
   const [leaveBalance, setLeaveBalance] = useState(null);
+  const [allBalances, setAllBalances] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceSearch, setBalanceSearch] = useState('');
+  const [balanceTypeFilter, setBalanceTypeFilter] = useState('All');
 
-  const API_BASE_URL = 'http://localhost:5000/api';
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API_BASE_URL = `${API_URL}/api`;
 
   // Fetch session user
   useEffect(() => {
-    fetch('http://localhost:5000/auth/status', { credentials: 'include' })
+    fetch(`${API_URL}/auth/status`, { credentials: 'include' })
       .then(r => r.json())
       .then(d => { if (d.loggedIn) setSessionUser(d.user); })
       .catch(() => {});
@@ -71,8 +75,15 @@ const LeaveRequests = () => {
     if (!sessionUser?.id) return;
     setBalanceLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/leave/balance/${sessionUser.id}`, { credentials: 'include' });
-      if (res.ok) setLeaveBalance(await res.json());
+      const _lpp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+      const _lhpp = Object.keys(_lpp).length > 0;
+      if (sessionUser.role === 'SUPER_ADMIN' || (_lhpp && _lpp.leave_requests)) {
+        const res = await fetch(`${API_BASE_URL}/leave/balance/all`, { credentials: 'include' });
+        if (res.ok) setAllBalances(await res.json());
+      } else {
+        const res = await fetch(`${API_BASE_URL}/leave/balance/${sessionUser.id}`, { credentials: 'include' });
+        if (res.ok) setLeaveBalance(await res.json());
+      }
     } catch (err) {
       console.error('Error fetching balance:', err);
     } finally {
@@ -220,9 +231,11 @@ const LeaveRequests = () => {
     return map[type] || '#6b7280';
   };
 
-  const isManager = sessionUser && ['SUPER_ADMIN', 'ADMIN', 'HR', 'HOD'].includes(sessionUser.role);
-  const isHR = sessionUser && ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(sessionUser.role);
-  const isSuperAdmin = sessionUser?.role === 'SUPER_ADMIN';
+  const _pp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const _hpp = Object.keys(_pp).length > 0;
+  const isManager = sessionUser && (['SUPER_ADMIN', 'ADMIN', 'HR', 'HOD'].includes(sessionUser.role) || (_hpp && _pp.leave_requests));
+  const isHR = sessionUser && (['SUPER_ADMIN', 'ADMIN', 'HR'].includes(sessionUser.role) || (_hpp && _pp.leave_requests));
+  const isSuperAdmin = sessionUser?.role === 'SUPER_ADMIN' || (_hpp && _pp.leave_requests);
 
   // Update isPaid for a leave request
   const handlePaidChange = async (requestId, isPaid) => {
@@ -374,6 +387,86 @@ const LeaveRequests = () => {
               <Loader2 size={32} className="animate-spin" style={{ margin: '0 auto 1rem', color: '#0C3D4A' }} />
               <p>Loading leave balance...</p>
             </div>
+          ) : isSuperAdmin && allBalances ? (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Year: <strong style={{ color: '#0C3D4A' }}>{allBalances.year}</strong> | Total Employees: <strong style={{ color: '#0C3D4A' }}>{allBalances.employees?.length || 0}</strong></span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <select value={balanceTypeFilter} onChange={(e) => setBalanceTypeFilter(e.target.value)}
+                    style={{ padding: '0.5rem 0.75rem', border: '1.5px solid #e2e8f0', borderRadius: '0.375rem', fontSize: '0.875rem', color: '#374151', cursor: 'pointer', backgroundColor: 'white' }}>
+                    <option value="All">All</option>
+                    <option value="Technical">Technical</option>
+                    <option value="Non-Technical">Non-Technical</option>
+                  </select>
+                  <input type="text" placeholder="Search employee..." value={balanceSearch} onChange={(e) => setBalanceSearch(e.target.value)}
+                    style={{ padding: '0.5rem 0.75rem', border: '1.5px solid #e2e8f0', borderRadius: '0.375rem', fontSize: '0.875rem', color: '#374151', width: '200px' }} />
+                </div>
+              </div>
+              <div className="table-container">
+                <table className="table">
+                  <thead className="table-head">
+                    <tr>
+                      <th className="table-header-cell">Employee</th>
+                      <th className="table-header-cell">Department</th>
+                      <th className="table-header-cell">Position</th>
+                      <th className="table-header-cell">Type</th>
+                      <th className="table-header-cell">Casual Allocated</th>
+                      <th className="table-header-cell">Casual Used</th>
+                      <th className="table-header-cell">Casual Remaining</th>
+                      <th className="table-header-cell">Medical Allocated</th>
+                      <th className="table-header-cell">Medical Used</th>
+                      <th className="table-header-cell">Medical Remaining</th>
+                      <th className="table-header-cell">Total Used</th>
+                    </tr>
+                  </thead>
+                  <tbody className="table-body">
+                    {(allBalances.employees || [])
+                      .filter(emp => {
+                        const matchesSearch = emp.employee.name.toLowerCase().includes(balanceSearch.toLowerCase()) || emp.employee.department.toLowerCase().includes(balanceSearch.toLowerCase());
+                        const matchesType = balanceTypeFilter === 'All' || (balanceTypeFilter === 'Technical' ? emp.isTechnical : !emp.isTechnical);
+                        return matchesSearch && matchesType;
+                      })
+                      .map(emp => {
+                        const casual = emp.leaveBalance.find(l => l.type === 'Casual Leave') || { allocated: 0, used: 0, remaining: 0 };
+                        const medical = emp.leaveBalance.find(l => l.type === 'Medical Leave') || { allocated: 0, used: 0, remaining: 0 };
+                        return (
+                          <tr key={emp.employee.id} className="table-row">
+                            <td className="table-cell" style={{ fontWeight: 600 }}>{emp.employee.name}</td>
+                            <td className="table-cell">{emp.employee.department}</td>
+                            <td className="table-cell">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                <span>{emp.employee.position || '-'}</span>
+                                <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '0.68rem', fontWeight: 600, background: emp.isTechnical ? '#dbeafe' : '#f3e8ff', color: emp.isTechnical ? '#1d4ed8' : '#7c3aed' }}>
+                                  {emp.isTechnical ? 'Technical' : 'Non-Technical'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="table-cell">
+                              <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 600, background: emp.isProbation ? '#fef3c7' : '#dcfce7', color: emp.isProbation ? '#92400e' : '#166534' }}>
+                                {emp.isProbation ? 'Probation' : 'Permanent'}
+                              </span>
+                            </td>
+                            <td className="table-cell" style={{ textAlign: 'center' }}>{casual.allocated}</td>
+                            <td className="table-cell" style={{ textAlign: 'center' }}>{casual.used}</td>
+                            <td className="table-cell" style={{ textAlign: 'center', fontWeight: 600, color: casual.remaining < 0 ? '#ef4444' : casual.remaining === 0 ? '#f59e0b' : '#10b981' }}>{casual.remaining}</td>
+                            <td className="table-cell" style={{ textAlign: 'center' }}>{medical.allocated}</td>
+                            <td className="table-cell" style={{ textAlign: 'center' }}>{medical.used}</td>
+                            <td className="table-cell" style={{ textAlign: 'center', fontWeight: 600, color: medical.remaining < 0 ? '#ef4444' : medical.remaining === 0 ? '#f59e0b' : '#10b981' }}>{medical.remaining}</td>
+                            <td className="table-cell" style={{ textAlign: 'center', fontWeight: 600 }}>{emp.totalDaysUsed}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+              {(allBalances.employees || []).filter(emp => {
+                const matchesSearch = emp.employee.name.toLowerCase().includes(balanceSearch.toLowerCase()) || emp.employee.department.toLowerCase().includes(balanceSearch.toLowerCase());
+                const matchesType = balanceTypeFilter === 'All' || (balanceTypeFilter === 'Technical' ? emp.isTechnical : !emp.isTechnical);
+                return matchesSearch && matchesType;
+              }).length === 0 && (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>No employees found</div>
+              )}
+            </div>
           ) : leaveBalance ? (
             <div>
               <div style={{ marginBottom: '1.25rem' }}>
@@ -434,7 +527,6 @@ const LeaveRequests = () => {
           {[
             { label: 'Total Approved', value: stats.totalApproved || 0, icon: <User size={20} color="#166534" />, bg: '#dcfce7' },
             { label: 'Pending Review', value: stats.pendingRequests || 0, icon: <Clock size={20} color="#92400e" />, bg: '#fef3c7' },
-            { label: 'Most Common', value: stats.mostCommonType || 'None', icon: <Calendar size={20} color="#3730a3" />, bg: '#e0e7ff' },
           ].map(card => (
             <div key={card.label} style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -457,10 +549,8 @@ const LeaveRequests = () => {
               <h2 className="table-title">{activeTab === 'requests' ? 'Leave Requests' : 'Leave History'}</h2>
             </div>
             <div className="table-header-right">
-              <div className="search-container">
-                <Search className="search-icon" />
-                <input type="text" placeholder="Search by name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="search-input" />
-              </div>
+              <input type="text" placeholder="Search by name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ padding: '0.5rem 0.75rem', border: '1.5px solid #e2e8f0', borderRadius: '0.375rem', fontSize: '0.875rem', color: '#374151', width: '200px' }} />
               {activeTab === 'requests' && (
                 <div style={{ position: 'relative' }}>
                   <button onClick={() => setFilterDropdownOpen(!filterDropdownOpen)} className="filter-button"><Filter style={{ width: '1.25rem', height: '1.25rem' }} /></button>

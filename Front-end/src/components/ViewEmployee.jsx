@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './ViewEmployee.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const ViewEmployee = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -13,7 +15,7 @@ const ViewEmployee = () => {
     const fetchEmployee = async () => {
       try {
         // Check role — GENERAL_USER may only view their own profile
-        const authRes = await fetch('http://localhost:5000/auth/status', { credentials: 'include' });
+        const authRes = await fetch(`${API_URL}/auth/status`, { credentials: 'include' });
         const authData = await authRes.json();
         if (!authData.loggedIn) return navigate('/login');
 
@@ -23,7 +25,7 @@ const ViewEmployee = () => {
           return;
         }
 
-        const res = await fetch(`http://localhost:5000/api/employees/${id}`, { credentials: 'include' });
+        const res = await fetch(`${API_URL}/api/employees/${id}`, { credentials: 'include' });
         if (res.status === 401) return navigate('/login');
         if (res.status === 403) {
           navigate('/AdminProfile', { replace: true });

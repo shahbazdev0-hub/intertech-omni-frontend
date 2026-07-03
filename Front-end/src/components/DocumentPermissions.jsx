@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
-const API = 'http://localhost:5000/api/document-permissions';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/document-permissions`;
 
 const ALL_PERMISSIONS = [
   { key: 'VIEW_OWN_DOCUMENTS', label: 'View Own Documents', group: 'Documents' },
@@ -51,7 +52,8 @@ export default function DocumentPermissions() {
   const [success, setSuccess] = useState('');
 
   const perms = JSON.parse(localStorage.getItem('documentPermissions') || '[]');
-  const canManage = perms.includes('MANAGE_DOCUMENT_PERMISSIONS');
+  const _pp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const canManage = perms.includes('MANAGE_DOCUMENT_PERMISSIONS') || (Object.keys(_pp).length > 0 && _pp.document_permissions);
 
   const fetchPermissions = async () => {
     try {

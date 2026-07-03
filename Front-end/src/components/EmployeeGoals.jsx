@@ -423,7 +423,9 @@ const EmployeeGoals = () => {
   if (!authChecked) return null;
 
   // Role-based permissions
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
+  const pp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const hpp = Object.keys(pp).length > 0;
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN' || (hpp && pp.goals);
   const isTeamLead = role === 'HOD';
   const isEmployee = role === 'GENERAL_USER';
   const canManageGoals = isAdmin || isTeamLead;

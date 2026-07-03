@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
-const API = 'http://localhost:5000/api/tickets';
-const COMMENT_API = 'http://localhost:5000/api/ticket-comments';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/tickets`;
+const COMMENT_API = `${API_URL}/api/ticket-comments`;
 
 const STATUS_COLORS = {
   PENDING: '#3b82f6', IN_PROGRESS: '#f59e0b', RESOLVED: '#10b981', CLOSED: '#6b7280', INVALID: '#ef4444',
@@ -36,7 +37,7 @@ export default function TicketDetail() {
   useEffect(() => {
     fetchTicket();
     if (perms.includes('ASSIGN_TICKET')) {
-      fetch('http://localhost:5000/api/employees', { credentials: 'include' })
+      fetch(`${API_URL}/api/employees`, { credentials: 'include' })
         .then(r => r.json())
         .then(data => { if (Array.isArray(data)) setEmployees(data); })
         .catch(() => {});

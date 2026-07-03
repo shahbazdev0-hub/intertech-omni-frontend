@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, User, FileText, Eye, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const LeaveRequestDetailsModal = ({ isOpen, onClose, requestId, API_BASE_URL }) => {
     const [requestDetails, setRequestDetails] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const DOCUMENT_BASE_URL = 'http://localhost:5000'; 
+    const DOCUMENT_BASE_URL = API_URL;
 
   useEffect(() => {
     if (isOpen && requestId) {

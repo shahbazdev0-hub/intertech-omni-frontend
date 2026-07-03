@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Download, Calendar, Filter, Clock, Users, TrendingUp, DollarSign, Plus, CheckCircle, XCircle, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import './OvertimePay.css';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // Per spec §3.6: OT is on a weekly basis; 40h/week threshold before OT applies.
 // OT is paid at the employee's regular hourly rate (1x, not 1.5x).
@@ -47,14 +50,14 @@ const OTRecordsTab = () => {
 
   const fetchDepartments = async () => {
     try {
-      const r = await fetch('http://localhost:5000/api/salaries/dropdown/departments', { credentials: 'include' });
+      const r = await fetch(`${API_URL}/api/salaries/dropdown/departments`, { credentials: 'include' });
       if (r.ok) { const d = await r.json(); if (d.success) setDepartments(['all', ...d.data.map(dep => dep.name)]); }
     } catch {}
   };
 
   const fetchSalaryData = async () => {
     try {
-      const r = await fetch('http://localhost:5000/api/salaries/current/all', { credentials: 'include' });
+      const r = await fetch(`${API_URL}/api/salaries/current/all`, { credentials: 'include' });
       if (r.ok) { const d = await r.json(); if (d.success) setSalaryData(d.data); }
     } catch {}
   };
@@ -69,7 +72,7 @@ const OTRecordsTab = () => {
       else if (dateRange === 'this_week') { const ws = new Date(today); ws.setDate(today.getDate() - today.getDay()); params.append('startDate', ws.toISOString().split('T')[0]); params.append('endDate', today.toISOString().split('T')[0]); }
       else if (dateRange === 'this_month') { const ms = new Date(today.getFullYear(), today.getMonth(), 1); params.append('startDate', ms.toISOString().split('T')[0]); params.append('endDate', today.toISOString().split('T')[0]); }
 
-      const r = await fetch(`http://localhost:5000/api/attendance/logs?${params}`, { credentials: 'include' });
+      const r = await fetch(`${API_URL}/api/attendance/logs?${params}`, { credentials: 'include' });
       if (r.ok) {
         const result = await r.json();
         // Only show records where the backend recorded actual overtime (weekly threshold enforced server-side)
@@ -113,14 +116,27 @@ const OTRecordsTab = () => {
   const formatTime = (dt) => dt ? new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
   const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '--';
 
-  const handleExport = () => {
+  const getOTExportData = () => {
     const headers = ['Date', 'Employee', 'Dept', 'Clock In', 'Clock Out', 'Regular Hrs', 'OT Hrs', 'Hourly Rate', 'Regular Pay', 'OT Pay'];
     const rows = filteredData.map(r => [formatDate(r.date), r.employee?.name, r.employee?.department?.name, formatTime(r.checkInTime), formatTime(r.checkOutTime), r.regularHours, r.overtimeHours, r.hourlyRate, r.regularPay, r.overtimePay]);
+    return { headers, rows };
+  };
+
+  const handleExportCSV = () => {
+    const { headers, rows } = getOTExportData();
     const csv = [headers, ...rows].map(row => row.map(v => `"${v ?? ''}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `ot_records_${new Date().toISOString().split('T')[0]}.csv`; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportExcel = () => {
+    const { headers, rows } = getOTExportData();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Overtime Records');
+    XLSX.writeFile(wb, `ot_records_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   return (
@@ -170,8 +186,11 @@ const OTRecordsTab = () => {
               <option value="low">Low OT (&lt;1h)</option>
             </select>
           </div>
-          <button onClick={handleExport} className="overtime-export-btn" disabled={loading}>
-            <Download className="overtime-btn-icon" /> Export
+          <button onClick={handleExportCSV} className="overtime-export-btn" disabled={loading}>
+            <Download className="overtime-btn-icon" /> CSV
+          </button>
+          <button onClick={handleExportExcel} className="overtime-export-btn" disabled={loading} style={{ backgroundColor: '#059669' }}>
+            <Download className="overtime-btn-icon" /> Excel
           </button>
         </div>
       </div>
@@ -258,7 +277,7 @@ const OTRequestsTab = ({ sessionUser }) => {
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      const r = await fetch('http://localhost:5000/api/overtime-requests', { credentials: 'include' });
+      const r = await fetch(`${API_URL}/api/overtime-requests`, { credentials: 'include' });
       if (r.ok) setRequests(await r.json());
       else setError('Failed to load overtime requests');
     } catch { setError('Network error'); }
@@ -276,7 +295,7 @@ const OTRequestsTab = ({ sessionUser }) => {
 
     setFormLoading(true);
     try {
-      const r = await fetch('http://localhost:5000/api/overtime-requests', {
+      const r = await fetch(`${API_URL}/api/overtime-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -296,7 +315,7 @@ const OTRequestsTab = ({ sessionUser }) => {
     const { action, id } = actionModal;
     setActionLoading(prev => ({ ...prev, [id]: true }));
     try {
-      const r = await fetch(`http://localhost:5000/api/overtime-requests/${id}/status`, {
+      const r = await fetch(`${API_URL}/api/overtime-requests/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -316,7 +335,7 @@ const OTRequestsTab = ({ sessionUser }) => {
   const handleDelete = async (id) => {
     if (!window.confirm('Cancel this overtime request?')) return;
     try {
-      const r = await fetch(`http://localhost:5000/api/overtime-requests/${id}`, { method: 'DELETE', credentials: 'include' });
+      const r = await fetch(`${API_URL}/api/overtime-requests/${id}`, { method: 'DELETE', credentials: 'include' });
       if (r.ok) setRequests(prev => prev.filter(req => req.id !== id));
       else { const d = await r.json(); setError(d.error || 'Failed to cancel'); }
     } catch { setError('Network error'); }
@@ -572,7 +591,7 @@ const OvertimePay = () => {
   const [sessionUser, setSessionUser] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:5000/auth/status', { credentials: 'include' })
+    fetch(`${API_URL}/auth/status`, { credentials: 'include' })
       .then(r => r.json())
       .then(d => { if (d.loggedIn) setSessionUser(d.user); })
       .catch(() => {});

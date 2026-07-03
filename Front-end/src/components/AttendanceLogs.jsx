@@ -1,9 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Download, Calendar, Filter, Clock, Users, TrendingUp, Eye, AlertTriangle } from 'lucide-react';
+import { Search, Download, Calendar, Filter, Clock, Users, TrendingUp, Eye, AlertTriangle, Edit2 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import AttendanceTracker from './AttendanceTracker';
 import './AttendanceLogs.css';
 
 const MANAGER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'HR', 'HOD'];
+
+// Format date from UTC (Prisma returns UTC midnight) — avoids timezone shift
+const formatUTCDate = (dateStr) => {
+  const d = new Date(dateStr);
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+};
 
 const AttendanceLogs = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,9 +43,24 @@ const AttendanceLogs = () => {
   const [markLoading, setMarkLoading] = useState(false);
   const [markResult, setMarkResult] = useState(null); // { type: 'success'|'error', message }
 
+  // Admin edit attendance modal state
+  const [editModal, setEditModal] = useState({
+    open: false,
+    employeeId: '',
+    employeeName: '',
+    date: '',
+    checkInTime: '',
+    checkOutTime: '',
+    notes: ''
+  });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editResult, setEditResult] = useState(null);
+
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
   // Fetch current user role and auto-set employee for non-managers
   useEffect(() => {
-    fetch('http://localhost:5000/auth/status', { credentials: 'include' })
+    fetch(`${API_URL}/auth/status`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         if (data.loggedIn) {
@@ -52,17 +74,28 @@ const AttendanceLogs = () => {
       .catch(() => {});
   }, []);
 
+  // Fetch departments from API
+  const fetchDepartments = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/departments`, { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        setDepartments(['all', ...data.map(d => d.name)]);
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+    }
+  };
+
   // Fetch employees for dropdown
   const fetchEmployees = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/employees', {
+      const response = await fetch(`${API_URL}/api/employees`, {
         credentials: 'include'
       });
       if (response.ok) {
         const data = await response.json();
         setEmployees(data);
-        const depts = ['all', ...new Set(data.map(emp => emp.department?.name).filter(Boolean))];
-        setDepartments(depts);
       }
     } catch (error) {
       console.error('Error fetching employees:', error);
@@ -79,22 +112,38 @@ const AttendanceLogs = () => {
       if (selectedStatus !== 'all') params.append('status', selectedStatus);
 
       const today = new Date();
+      const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth()+1).padStart(2,'0')}-${String(today.getUTCDate()).padStart(2,'0')}`;
       if (dateRange === 'today') {
-        params.append('startDate', today.toISOString().split('T')[0]);
-        params.append('endDate', today.toISOString().split('T')[0]);
+        params.append('startDate', todayStr);
+        params.append('endDate', todayStr);
       } else if (dateRange === 'yesterday') {
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        params.append('startDate', yesterday.toISOString().split('T')[0]);
-        params.append('endDate', yesterday.toISOString().split('T')[0]);
+        const yesterday = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 1));
+        const yStr = `${yesterday.getUTCFullYear()}-${String(yesterday.getUTCMonth()+1).padStart(2,'0')}-${String(yesterday.getUTCDate()).padStart(2,'0')}`;
+        params.append('startDate', yStr);
+        params.append('endDate', yStr);
       } else if (dateRange === 'this_week') {
-        const weekStart = new Date(today);
-        weekStart.setDate(today.getDate() - today.getDay());
-        params.append('startDate', weekStart.toISOString().split('T')[0]);
-        params.append('endDate', today.toISOString().split('T')[0]);
+        const dow = today.getUTCDay();
+        const weekStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - dow));
+        const wStr = `${weekStart.getUTCFullYear()}-${String(weekStart.getUTCMonth()+1).padStart(2,'0')}-${String(weekStart.getUTCDate()).padStart(2,'0')}`;
+        params.append('startDate', wStr);
+        params.append('endDate', todayStr);
+      } else if (dateRange === 'last_week') {
+        const dow = today.getUTCDay();
+        const lastWeekEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - dow - 1));
+        const lastWeekStart = new Date(Date.UTC(lastWeekEnd.getUTCFullYear(), lastWeekEnd.getUTCMonth(), lastWeekEnd.getUTCDate() - 6));
+        const lwsStr = `${lastWeekStart.getUTCFullYear()}-${String(lastWeekStart.getUTCMonth()+1).padStart(2,'0')}-${String(lastWeekStart.getUTCDate()).padStart(2,'0')}`;
+        const lweStr = `${lastWeekEnd.getUTCFullYear()}-${String(lastWeekEnd.getUTCMonth()+1).padStart(2,'0')}-${String(lastWeekEnd.getUTCDate()).padStart(2,'0')}`;
+        params.append('startDate', lwsStr);
+        params.append('endDate', lweStr);
+      } else if (dateRange === 'this_month') {
+        const monthStart = `${today.getUTCFullYear()}-${String(today.getUTCMonth()+1).padStart(2,'0')}-01`;
+        params.append('startDate', monthStart);
+        params.append('endDate', todayStr);
       }
 
-      const response = await fetch(`http://localhost:5000/api/attendance/logs?${params}`, {
+      params.append('limit', '100');
+
+      const response = await fetch(`${API_URL}/api/attendance/logs?${params}`, {
         credentials: 'include'
       });
 
@@ -111,7 +160,7 @@ const AttendanceLogs = () => {
     }
   };
 
-  useEffect(() => { fetchEmployees(); }, []);
+  useEffect(() => { fetchDepartments(); fetchEmployees(); }, []);
   useEffect(() => { fetchAttendanceLogs(); }, [selectedDepartment, selectedStatus, dateRange, selectedEmployee]);
 
   const filteredData = useMemo(() => {
@@ -151,25 +200,30 @@ const AttendanceLogs = () => {
     return `${hours.toFixed(1)}h`;
   };
 
-  const handleExport = () => {
+  const getExportRows = () => {
     const headers = ['Date', 'Employee', 'Check In', 'Check Out', 'Total Hours', 'Break (mins)', 'Break Type', 'Overrun', 'Status', 'Location', 'Notes'];
+    const rows = filteredData.map(record => [
+      formatUTCDate(record.date),
+      record.employee?.name || '',
+      formatTime(record.checkInTime),
+      formatTime(record.checkOutTime),
+      formatHours(record.totalHours),
+      record.breakMinutes || 0,
+      record.breakType || '',
+      record.breakOverrun ? 'Yes' : 'No',
+      record.status,
+      record.location || 'Office',
+      record.notes || ''
+    ]);
+    return { headers, rows };
+  };
+
+  const handleExportCSV = () => {
+    const { headers, rows } = getExportRows();
     const csvContent = [
       headers.join(','),
-      ...filteredData.map(record => [
-        new Date(record.date).toLocaleDateString(),
-        record.employee?.name || '',
-        formatTime(record.checkInTime),
-        formatTime(record.checkOutTime),
-        formatHours(record.totalHours),
-        record.breakMinutes || 0,
-        record.breakType || '',
-        record.breakOverrun ? 'Yes' : 'No',
-        record.status,
-        record.location || 'Office',
-        record.notes || ''
-      ].map(field => `"${field}"`).join(','))
+      ...rows.map(row => row.map(field => `"${field}"`).join(','))
     ].join('\n');
-
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -177,6 +231,14 @@ const AttendanceLogs = () => {
     a.download = `attendance_logs_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
+  };
+
+  const handleExportExcel = () => {
+    const { headers, rows } = getExportRows();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance Logs');
+    XLSX.writeFile(wb, `attendance_logs_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handleAttendanceUpdate = () => {
@@ -206,7 +268,7 @@ const AttendanceLogs = () => {
     setMarkLoading(true);
     setMarkResult(null);
     try {
-      const res = await fetch('http://localhost:5000/api/attendance/mark-absence', {
+      const res = await fetch(`${API_URL}/api/attendance/mark-absence`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -229,7 +291,81 @@ const AttendanceLogs = () => {
     }
   };
 
-  const isManager = MANAGER_ROLES.includes(role);
+  // Open edit attendance modal
+  const openEditModal = (record) => {
+    setEditResult(null);
+    const dateStr = new Date(record.date).toISOString().split('T')[0];
+    const formatTimeForInput = (dt) => {
+      if (!dt) return '';
+      const d = new Date(dt);
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+    setEditModal({
+      open: true,
+      employeeId: record.employeeId || record.employee?.id || '',
+      employeeName: record.employee?.name || 'Unknown',
+      date: dateStr,
+      checkInTime: formatTimeForInput(record.checkInTime),
+      checkOutTime: formatTimeForInput(record.checkOutTime),
+      notes: record.notes || ''
+    });
+  };
+
+  // Open edit modal for new record (no existing record)
+  const openNewEditModal = () => {
+    setEditResult(null);
+    setEditModal({
+      open: true,
+      employeeId: '',
+      employeeName: '',
+      date: new Date().toISOString().split('T')[0],
+      checkInTime: '',
+      checkOutTime: '',
+      notes: ''
+    });
+  };
+
+  const closeEditModal = () => {
+    setEditModal(prev => ({ ...prev, open: false }));
+    setEditResult(null);
+  };
+
+  const handleEditAttendance = async () => {
+    if (!editModal.employeeId || !editModal.date || !editModal.checkInTime) {
+      setEditResult({ type: 'error', message: 'Employee, date, and check-in time are required' });
+      return;
+    }
+    setEditLoading(true);
+    setEditResult(null);
+    try {
+      const res = await fetch(`${API_URL}/api/attendance/admin-edit`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          employeeId: parseInt(editModal.employeeId),
+          date: editModal.date,
+          checkInTime: editModal.checkInTime,
+          checkOutTime: editModal.checkOutTime || undefined,
+          notes: editModal.notes || undefined
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to edit attendance');
+      setEditResult({ type: 'success', message: data.message });
+      fetchAttendanceLogs();
+      setTimeout(() => closeEditModal(), 1500);
+    } catch (err) {
+      setEditResult({ type: 'error', message: err.message });
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const pp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const hpp = Object.keys(pp).length > 0;
+  const isSuperAdmin = role === 'SUPER_ADMIN' || (hpp && pp.attendance_logs);
+  const isManager = MANAGER_ROLES.includes(role) || (hpp && pp.attendance_logs);
 
   return (
     <div className="attendance-logs-layout">
@@ -246,12 +382,21 @@ const AttendanceLogs = () => {
               <select
                 id="employee-select"
                 value={selectedEmployee}
-                onChange={(e) => setSelectedEmployee(e.target.value)}
+                onChange={(e) => {
+                  const empId = e.target.value;
+                  setSelectedEmployee(empId);
+                  if (empId) {
+                    const emp = employees.find(em => String(em.id) === String(empId));
+                    if (emp?.department?.name) {
+                      setSelectedDepartment(emp.department.name);
+                    }
+                  }
+                }}
                 className="attendance-filter-select"
                 style={{ minWidth: '300px' }}
               >
                 <option value="">-- Select Employee --</option>
-                {employees.map(emp => (
+                {(selectedDepartment === 'all' ? employees : employees.filter(emp => emp.department?.name === selectedDepartment)).map(emp => (
                   <option key={emp.id} value={emp.id}>
                     {emp.name} ({emp.email})
                   </option>
@@ -347,7 +492,16 @@ const AttendanceLogs = () => {
                 <select
                   className="attendance-filter-select"
                   value={selectedDepartment}
-                  onChange={(e) => setSelectedDepartment(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedDepartment(e.target.value);
+                    // Clear selected employee if they don't belong to the new department
+                    if (selectedEmployee && e.target.value !== 'all') {
+                      const emp = employees.find(em => String(em.id) === String(selectedEmployee));
+                      if (emp && emp.department?.name !== e.target.value) {
+                        setSelectedEmployee('');
+                      }
+                    }
+                  }}
                 >
                   {departments.map(dept => (
                     <option key={dept} value={dept}>
@@ -370,10 +524,22 @@ const AttendanceLogs = () => {
                   <option value="OVERTIME">Overtime</option>
                 </select>
               </div>
-              <button onClick={handleExport} className="attendance-export-btn" disabled={loading}>
-                <Download className="attendance-btn-icon" />
-                Export
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {isSuperAdmin && (
+                  <button onClick={openNewEditModal} className="attendance-export-btn" style={{ backgroundColor: '#059669' }}>
+                    <Edit2 className="attendance-btn-icon" />
+                    Edit Attendance
+                  </button>
+                )}
+                <button onClick={handleExportCSV} className="attendance-export-btn" disabled={loading}>
+                  <Download className="attendance-btn-icon" />
+                  CSV
+                </button>
+                <button onClick={handleExportExcel} className="attendance-export-btn" disabled={loading} style={{ backgroundColor: '#059669' }}>
+                  <Download className="attendance-btn-icon" />
+                  Excel
+                </button>
+              </div>
             </div>
           </div>
 
@@ -396,11 +562,14 @@ const AttendanceLogs = () => {
                       <th className="attendance-table-th">Break / Type</th>
                       <th className="attendance-table-th">Status</th>
                       <th className="attendance-table-th">Location</th>
+                      {isSuperAdmin && <th className="attendance-table-th">Actions</th>}
                     </tr>
                   </thead>
                   <tbody className="attendance-table-body">
-                    {filteredData.map(record => (
-                      <tr key={record.id} className="attendance-table-row">
+                    {filteredData.map(record => {
+                      const isAbsent = record.status === 'ABSENT';
+                      return (
+                      <tr key={record.id} className={`attendance-table-row${isAbsent ? ' attendance-table-row-absent' : ''}`}>
                         <td className="attendance-table-td">
                           <div className="attendance-employee-info">
                             <div className="attendance-employee-avatar">
@@ -416,11 +585,12 @@ const AttendanceLogs = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="attendance-table-td">{new Date(record.date).toLocaleDateString()}</td>
-                        <td className="attendance-table-td attendance-table-time">{formatTime(record.checkInTime)}</td>
-                        <td className="attendance-table-td attendance-table-time">{formatTime(record.checkOutTime)}</td>
-                        <td className="attendance-table-td attendance-table-hours">{formatHours(record.totalHours)}</td>
+                        <td className="attendance-table-td">{formatUTCDate(record.date)}</td>
+                        <td className="attendance-table-td attendance-table-time">{isAbsent ? '—' : formatTime(record.checkInTime)}</td>
+                        <td className="attendance-table-td attendance-table-time">{isAbsent ? '—' : formatTime(record.checkOutTime)}</td>
+                        <td className="attendance-table-td attendance-table-hours">{isAbsent ? '—' : formatHours(record.totalHours)}</td>
                         <td className="attendance-table-td attendance-table-break">
+                          {isAbsent ? '—' : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                             <span>{record.breakMinutes || 0}m</span>
                             {record.breakType && (
@@ -432,21 +602,31 @@ const AttendanceLogs = () => {
                               </span>
                             )}
                             {record.breakOverrun && (
-                              <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 600 }}>⚠ Overrun</span>
+                              <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 600 }}>Overrun</span>
                             )}
                           </div>
+                          )}
                         </td>
                         <td className="attendance-table-td">
                           {getStatusBadge(record.status)}
                           {record.notes && (
                             <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '2px' }} title={record.notes}>
-                              📝 {record.notes.length > 20 ? record.notes.slice(0, 20) + '…' : record.notes}
+                              {record.notes.length > 20 ? record.notes.slice(0, 20) + '…' : record.notes}
                             </div>
                           )}
                         </td>
-                        <td className="attendance-table-td attendance-table-location">{record.location || '—'}</td>
+                        <td className="attendance-table-td attendance-table-location">{isAbsent ? '—' : (record.location || '—')}</td>
+                        {isSuperAdmin && (
+                          <td className="attendance-table-td">
+                            <button onClick={() => openEditModal(record)}
+                              style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#0C3D4A', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Edit2 size={12} /> Edit
+                            </button>
+                          </td>
+                        )}
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -599,6 +779,131 @@ const AttendanceLogs = () => {
               >
                 {markLoading ? 'Saving…' : `Mark as ${markModal.status}`}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Edit Attendance Modal */}
+      {editModal.open && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,0.45)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '12px',
+            width: '480px',
+            maxWidth: '95vw',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+            overflow: 'hidden'
+          }}>
+            <div style={{ background: '#0C3D4A', padding: '1.1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, color: 'white', fontSize: '1rem', fontWeight: 700 }}>
+                <Edit2 size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                {editModal.employeeName ? 'Edit Attendance' : 'Create Attendance'}
+              </h3>
+              <button onClick={closeEditModal} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+            </div>
+
+            <div style={{ padding: '1.25rem 1.5rem' }}>
+              {/* Employee select (only for new records) */}
+              {!editModal.employeeName && (
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: '#64748b', marginBottom: '4px', fontWeight: 600 }}>Employee *</label>
+                  <select
+                    value={editModal.employeeId}
+                    onChange={e => setEditModal(prev => ({ ...prev, employeeId: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  >
+                    <option value="">-- Select Employee --</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.email})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Employee name (for editing existing) */}
+              {editModal.employeeName && (
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: '#64748b', marginBottom: '4px' }}>Employee</label>
+                  <div style={{ fontWeight: 600, color: '#1e293b' }}>{editModal.employeeName}</div>
+                </div>
+              )}
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', color: '#64748b', marginBottom: '4px', fontWeight: 600 }}>Date *</label>
+                <input
+                  type="date"
+                  value={editModal.date}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={e => setEditModal(prev => ({ ...prev, date: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: '#64748b', marginBottom: '4px', fontWeight: 600 }}>Check-in Time *</label>
+                  <input
+                    type="time"
+                    value={editModal.checkInTime}
+                    onChange={e => setEditModal(prev => ({ ...prev, checkInTime: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: '#64748b', marginBottom: '4px', fontWeight: 600 }}>Check-out Time</label>
+                  <input
+                    type="time"
+                    value={editModal.checkOutTime}
+                    onChange={e => setEditModal(prev => ({ ...prev, checkOutTime: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', color: '#64748b', marginBottom: '4px', fontWeight: 600 }}>
+                  Notes <span style={{ fontWeight: 400 }}>(reason for edit)</span>
+                </label>
+                <textarea
+                  value={editModal.notes}
+                  onChange={e => setEditModal(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Reason for editing attendance..."
+                  rows={2}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ padding: '10px 12px', borderRadius: '6px', background: '#f0f9ff', border: '1px solid #bae6fd', marginBottom: '14px', fontSize: '0.78rem', color: '#0369a1' }}>
+                Status, late minutes, total hours, and overtime will be auto-calculated based on the employee's department shift timings.
+              </div>
+
+              {editResult && (
+                <div style={{
+                  padding: '10px 14px', borderRadius: '6px', marginBottom: '14px',
+                  background: editResult.type === 'success' ? '#dcfce7' : '#fee2e2',
+                  color: editResult.type === 'success' ? '#166534' : '#b91c1c',
+                  fontSize: '0.87rem', fontWeight: 500
+                }}>
+                  {editResult.type === 'success' ? '✓ ' : '✗ '}{editResult.message}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button onClick={closeEditModal} disabled={editLoading}
+                  style={{ padding: '9px 20px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontWeight: 500 }}>
+                  Cancel
+                </button>
+                <button onClick={handleEditAttendance} disabled={editLoading || !editModal.employeeId || !editModal.date || !editModal.checkInTime}
+                  style={{ padding: '9px 20px', borderRadius: '6px', border: 'none', background: editLoading ? '#94a3b8' : '#0C3D4A', color: '#fff', cursor: editLoading ? 'not-allowed' : 'pointer', fontWeight: 600 }}>
+                  {editLoading ? 'Saving…' : 'Save Attendance'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

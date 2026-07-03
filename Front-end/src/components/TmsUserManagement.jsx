@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Trash2, Key, Edit3, X, Shield } from 'lucide-react';
+import { Users, Plus, Trash2, Key, Edit3, X, Shield, Eye, EyeOff } from 'lucide-react';
 
-const API = 'http://localhost:5000/api/tms';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/tms`;
 
 export default function TmsUserManagement() {
   const tmsUser = JSON.parse(localStorage.getItem('tmsUser') || '{}');
   const [users, setUsers] = useState([]);
   const [designations, setDesignations] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -15,6 +17,9 @@ export default function TmsUserManagement() {
   const [showUserForm, setShowUserForm] = useState(false);
   const emptyUserForm = { name: '', email: '', password: '', role: 'HR_EXECUTIVE' };
   const [userForm, setUserForm] = useState(emptyUserForm);
+
+  // Password visibility
+  const [showPassword, setShowPassword] = useState(false);
 
   // Reset password form
   const [showResetForm, setShowResetForm] = useState(false);
@@ -26,17 +31,24 @@ export default function TmsUserManagement() {
   const [desName, setDesName] = useState('');
   const [editingDes, setEditingDes] = useState(null);
 
+  // Role form
+  const [showRoleForm, setShowRoleForm] = useState(false);
+  const [roleName, setRoleName] = useState('');
+  const [editingRole, setEditingRole] = useState(null);
+
   // Active tab
   const [tab, setTab] = useState('users');
 
   const fetchData = async () => {
     try {
-      const [uRes, dRes] = await Promise.all([
+      const [uRes, dRes, rRes] = await Promise.all([
         fetch(`${API}/manage/users`, { credentials: 'include' }),
         fetch(`${API}/manage/designations`, { credentials: 'include' }),
+        fetch(`${API}/manage/roles`, { credentials: 'include' }),
       ]);
       if (uRes.ok) setUsers(await uRes.json());
       if (dRes.ok) setDesignations(await dRes.json());
+      if (rRes.ok) setRoles(await rRes.json());
     } catch {
       setError('Failed to load data');
     } finally {
@@ -145,6 +157,44 @@ export default function TmsUserManagement() {
     }
   };
 
+  // --- Role CRUD ---
+  const handleRoleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const url = editingRole ? `${API}/manage/roles/${editingRole.id}` : `${API}/manage/roles`;
+      const method = editingRole ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method, credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: roleName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      showMsg(editingRole ? 'Role updated' : 'Role created');
+      setShowRoleForm(false);
+      setRoleName('');
+      setEditingRole(null);
+      fetchData();
+    } catch (err) {
+      showMsg(err.message, true);
+    }
+  };
+
+  const handleDeleteRole = async (id, name) => {
+    if (!window.confirm(`Delete role "${name}"?`)) return;
+    try {
+      const res = await fetch(`${API}/manage/roles/${id}`, {
+        method: 'DELETE', credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      showMsg('Role deleted');
+      fetchData();
+    } catch (err) {
+      showMsg(err.message, true);
+    }
+  };
+
   const roleLabels = {
     HR_EXECUTIVE: 'HR Executive',
     HR_MANAGER: 'HR Manager',
@@ -156,9 +206,11 @@ export default function TmsUserManagement() {
   if (loading) return <div className="tms-loading">Loading...</div>;
 
   const perms = JSON.parse(localStorage.getItem('tmsPermissions') || '[]');
-  const canManageUsers = perms.includes('MANAGE_USERS');
-  const canResetPassword = perms.includes('RESET_PASSWORD');
-  const canManageDesignations = perms.includes('MANAGE_DESIGNATIONS');
+  const _pp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const _hpp = Object.keys(_pp).length > 0 && _pp.tms_user_management;
+  const canManageUsers = perms.includes('MANAGE_USERS') || _hpp;
+  const canResetPassword = perms.includes('RESET_PASSWORD') || _hpp;
+  const canManageDesignations = perms.includes('MANAGE_DESIGNATIONS') || _hpp;
 
   if (!canManageUsers && !canResetPassword && !canManageDesignations) {
     return (
@@ -188,6 +240,11 @@ export default function TmsUserManagement() {
         {canManageDesignations && (
           <button className={`tms-tab ${tab === 'designations' ? 'tms-tab-active' : ''}`} onClick={() => setTab('designations')}>
             <Shield size={16} /> Positions
+          </button>
+        )}
+        {canManageDesignations && (
+          <button className={`tms-tab ${tab === 'roles' ? 'tms-tab-active' : ''}`} onClick={() => setTab('roles')}>
+            <Key size={16} /> Roles
           </button>
         )}
       </div>
@@ -280,37 +337,103 @@ export default function TmsUserManagement() {
         </>
       )}
 
+      {/* Roles Tab */}
+      {tab === 'roles' && canManageDesignations && (
+        <>
+          <div style={{ marginBottom: 16 }}>
+            <button className="tms-btn tms-btn-primary" onClick={() => { setShowRoleForm(true); setEditingRole(null); setRoleName(''); }}>
+              <Plus size={16} /> Add Role
+            </button>
+          </div>
+
+          <div className="tms-table-wrapper">
+            <table className="tms-table">
+              <thead>
+                <tr>
+                  <th>Role Name</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roles.length === 0 ? (
+                  <tr><td colSpan={2} className="tms-empty">No roles found</td></tr>
+                ) : roles.map((r) => (
+                  <tr key={r.id}>
+                    <td className="tms-filename">{r.name}</td>
+                    <td className="tms-actions">
+                      <button title="Edit" onClick={() => { setEditingRole(r); setRoleName(r.name); setShowRoleForm(true); }}>
+                        <Edit3 size={15} />
+                      </button>
+                      <button title="Delete" onClick={() => handleDeleteRole(r.id, r.name)}>
+                        <Trash2 size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* Role Form Modal */}
+      {showRoleForm && (
+        <div className="tms-modal-overlay" onClick={() => setShowRoleForm(false)}>
+          <div className="tms-modal tms-modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="tms-modal-header">
+              <h2>{editingRole ? 'Edit Role' : 'Add Role'}</h2>
+              <button onClick={() => setShowRoleForm(false)}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleRoleSubmit}>
+              <div className="tms-form-group" style={{ marginBottom: 14 }}>
+                <label>Role Name *</label>
+                <input type="text" value={roleName} onChange={(e) => setRoleName(e.target.value)} required placeholder="e.g. Finance Manager" />
+              </div>
+              <div className="tms-form-actions">
+                <button type="button" className="tms-btn tms-btn-secondary" onClick={() => setShowRoleForm(false)}>Cancel</button>
+                <button type="submit" className="tms-btn tms-btn-primary">{editingRole ? 'Update' : 'Create Role'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Create User Modal */}
       {showUserForm && (
         <div className="tms-modal-overlay" onClick={() => setShowUserForm(false)}>
-          <div className="tms-modal tms-modal-sm" onClick={(e) => e.stopPropagation()}>
+          <div className="tms-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <div className="tms-modal-header">
               <h2>Create TMS User</h2>
               <button className="tms-close-btn" onClick={() => setShowUserForm(false)}><X size={20} /></button>
             </div>
-            <form onSubmit={handleCreateUser}>
-              <div className="tms-form-group" style={{ marginBottom: 14 }}>
-                <label>Full Name *</label>
-                <input value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} required />
-              </div>
-              <div className="tms-form-group" style={{ marginBottom: 14 }}>
-                <label>Email *</label>
-                <input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} required />
-              </div>
-              <div className="tms-form-group" style={{ marginBottom: 14 }}>
-                <label>Password *</label>
-                <input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required minLength={6} />
-                <small>Minimum 6 characters</small>
-              </div>
-              <div className="tms-form-group" style={{ marginBottom: 14 }}>
-                <label>Role *</label>
-                <select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })} required>
-                  <option value="HR_EXECUTIVE">HR Executive</option>
-                  <option value="HR_MANAGER">HR Manager</option>
-                  <option value="HOD">HOD</option>
-                  <option value="SUPER_ADMIN">Super Admin</option>
-                  <option value="IT_SUPPORT">IT Support</option>
-                </select>
+            <form onSubmit={handleCreateUser} autoComplete="off">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 14px' }}>
+                <div className="tms-form-group" style={{ marginBottom: 14 }}>
+                  <label>Full Name *</label>
+                  <input value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} required autoComplete="off" />
+                </div>
+                <div className="tms-form-group" style={{ marginBottom: 14 }}>
+                  <label>Email *</label>
+                  <input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} required autoComplete="new-email" />
+                </div>
+                <div className="tms-form-group" style={{ marginBottom: 14 }}>
+                  <label>Password *</label>
+                  <div style={{ position: 'relative', width: '100%' }}>
+                    <input type={showPassword ? 'text' : 'password'} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required minLength={6} style={{ paddingRight: 36, width: '100%', boxSizing: 'border-box' }} autoComplete="new-password" />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 0, display: 'flex', alignItems: 'center' }}>
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <small>Minimum 6 characters</small>
+                </div>
+                <div className="tms-form-group" style={{ marginBottom: 14 }}>
+                  <label>Role *</label>
+                  <select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })} required>
+                    {roles.map(r => (
+                      <option key={r.id} value={r.name}>{r.name.replace(/_/g, ' ')}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="tms-form-actions">
                 <button type="button" className="tms-btn tms-btn-secondary" onClick={() => setShowUserForm(false)}>Cancel</button>

@@ -1,3 +1,12 @@
+/* ── Always show number input spinners ──────────────── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: inner-spin-button;
+  opacity: 1;
+  height: 28px;
+  cursor: pointer;
+}
+
 /* ── Design System Variables ─────────────────────────── */
 :root {
   --primary:        #0C3D4A;

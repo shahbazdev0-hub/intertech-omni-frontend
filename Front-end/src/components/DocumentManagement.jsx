@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
-const API = 'http://localhost:5000/api/documents';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/documents`;
 
 const DOCUMENT_TYPE_LABELS = {
   OFFER_LETTER: 'Offer Letter',
@@ -99,7 +100,7 @@ export default function DocumentManagement() {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/employees', { credentials: 'include' });
+      const res = await fetch(`${API_URL}/api/employees`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setEmployees(Array.isArray(data) ? data : data.employees || []);
@@ -237,7 +238,7 @@ export default function DocumentManagement() {
       <div style={{ display: 'flex', gap: 12, marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         <input
           type="text"
-          placeholder="Search by title or employee..."
+          placeholder="Search by title"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13, minWidth: 220 }}

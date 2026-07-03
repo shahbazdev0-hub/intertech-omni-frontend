@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, RefreshCw, Download, Clock, Users, Search, CheckCircle } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
-const API = 'http://localhost:5000/api/shifts';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/shifts`;
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_LABELS = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
 
@@ -211,7 +213,7 @@ const AssignmentsTab = ({ isManager, sessionUser }) => {
       if (sRes.ok) setShifts(await sRes.json());
 
       if (isManager) {
-        const eRes = await fetch('http://localhost:5000/api/employees', { credentials: 'include' });
+        const eRes = await fetch(`${API_URL}/api/employees`, { credentials: 'include' });
         if (eRes.ok) setEmployees(await eRes.json());
       }
     } catch { setError('Failed to load data'); }
@@ -258,17 +260,30 @@ const AssignmentsTab = ({ isManager, sessionUser }) => {
     } catch { setError('Network error'); }
   };
 
-  const exportCSV = () => {
+  const getShiftExportData = () => {
     const headers = ['Employee', 'Department', 'Position', 'Shift', 'Start Time', 'End Time', 'Days', 'Effective From', 'Effective To'];
     const rows = filtered.map(a => {
       const days = Array.isArray(a.shift.days) ? a.shift.days : JSON.parse(a.shift.days);
       return [a.employee?.name, a.employee?.department?.name, a.employee?.position, a.shift.name, a.shift.startTime, a.shift.endTime, days.join('/'), a.effectiveFrom?.split('T')[0], a.effectiveTo?.split('T')[0] || 'Ongoing'];
     });
+    return { headers, rows };
+  };
+
+  const exportCSV = () => {
+    const { headers, rows } = getShiftExportData();
     const csv = [headers, ...rows].map(r => r.map(v => `"${v ?? ''}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `shift_assignments_${new Date().toISOString().split('T')[0]}.csv`; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportExcel = () => {
+    const { headers, rows } = getShiftExportData();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Shift Assignments');
+    XLSX.writeFile(wb, `shift_assignments_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -299,7 +314,10 @@ const AssignmentsTab = ({ isManager, sessionUser }) => {
             <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." style={{ border: 'none', outline: 'none', fontSize: '0.875rem', width: '160px' }} />
           </div>
           <button onClick={exportCSV} style={{ padding: '0.4rem 0.75rem', background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.875rem' }}>
-            <Download size={14} /> Export
+            <Download size={14} /> CSV
+          </button>
+          <button onClick={exportExcel} style={{ padding: '0.4rem 0.75rem', background: '#059669', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.875rem' }}>
+            <Download size={14} /> Excel
           </button>
           {isManager && (
             <button onClick={() => openAssign()} style={{ padding: '0.4rem 1rem', background: '#0C3D4A', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.875rem', fontWeight: 600 }}>
@@ -427,7 +445,7 @@ const ShiftManagement = () => {
   const [sessionUser, setSessionUser] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:5000/auth/status', { credentials: 'include' })
+    fetch(`${API_URL}/auth/status`, { credentials: 'include' })
       .then(r => r.json())
       .then(d => { if (d.loggedIn) setSessionUser(d.user); })
       .catch(() => {});

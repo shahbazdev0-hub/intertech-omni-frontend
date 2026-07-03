@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Download, Edit3, MessageSquare, Search, X, Filter, Trash2, Eye, UserPlus } from 'lucide-react';
+import { Upload, Download, Edit3, MessageSquare, Search, X, Filter, Trash2, Eye, EyeOff, UserPlus, Copy, Check } from 'lucide-react';
 import mammoth from 'mammoth';
 
-const API = 'http://localhost:5000/api/tms';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/tms`;
 
 export default function TmsUploadResume() {
   const [resumes, setResumes] = useState([]);
@@ -46,10 +47,18 @@ export default function TmsUploadResume() {
   const [convertModal, setConvertModal] = useState(null);
   const [convertForm, setConvertForm] = useState({ email: '', salary: '', departmentId: '', joinDate: '', age: '', experience: '', employmentType: 'PROBATION' });
   const [convertResult, setConvertResult] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedField, setCopiedField] = useState('');
+
+  const copyToClipboard = (text, field) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(''), 1500);
+  };
 
   const fetchDepartments = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/departments', { credentials: 'include' });
+      const res = await fetch(`${API_URL}/api/departments`, { credentials: 'include' });
       if (res.ok) setDepartments(await res.json());
     } catch {}
   };
@@ -139,11 +148,23 @@ export default function TmsUploadResume() {
   const canExport = perms.includes('EXPORT_CSV');
   const canConvert = perms.includes('MANAGE_USERS');
 
+  const generatePassword = () => {
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const digits = '0123456789';
+    const special = '@#$&!';
+    const all = upper + lower + digits + special;
+    let pwd = [upper, lower, digits, special].map(s => s[Math.floor(Math.random() * s.length)]).join('');
+    for (let i = 0; i < 6; i++) pwd += all[Math.floor(Math.random() * all.length)];
+    return pwd.split('').sort(() => Math.random() - 0.5).join('');
+  };
+
   const openConvertModal = (resume) => {
     const name = `${resume.firstName || ''} ${resume.lastName || ''}`.trim();
     const emailSuggestion = name ? `${name.toLowerCase().replace(/ /g, '.')}@hrcore.com` : '';
-    setConvertForm({ email: emailSuggestion, salary: '', departmentId: '', joinDate: new Date().toISOString().split('T')[0], age: '', experience: '', employmentType: 'PROBATION' });
+    setConvertForm({ email: emailSuggestion, password: generatePassword(), salary: '', departmentId: '', joinDate: new Date().toISOString().split('T')[0], age: '', experience: '', employmentType: 'PROBATION' });
     setConvertResult(null);
+    setShowPassword(false);
     setConvertModal(resume);
   };
 
@@ -437,8 +458,12 @@ export default function TmsUploadResume() {
                   <p style={{ margin: '4px 0' }}><strong>Name:</strong> {convertResult.employee.name}</p>
                   <p style={{ margin: '4px 0' }}><strong>Email:</strong> {convertResult.employee.email}</p>
                   <p style={{ margin: '4px 0' }}><strong>Position:</strong> {convertResult.employee.position}</p>
-                  <p style={{ margin: '4px 0' }}><strong>Temporary Password:</strong> <code style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold' }}>{convertResult.tempPassword}</code></p>
-                  <p style={{ color: '#92400e', fontSize: '13px', marginTop: '12px' }}>Please share these credentials with the new employee securely.</p>
+                  <p style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}><strong>Password:</strong> {showPassword ? convertForm.password : '••••••••••'} <span onClick={() => setShowPassword(!showPassword)} style={{ cursor: 'pointer', color: '#64748b' }}>{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}</span></p>
+                  <div style={{ marginTop: '12px' }}>
+                    <button type="button" onClick={() => copyToClipboard(`Email: ${convertResult.employee.email}\nPassword: ${convertForm.password}`, 'credentials')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', background: copiedField === 'credentials' ? '#ecfdf5' : '#f1f5f9', border: `1px solid ${copiedField === 'credentials' ? '#10b981' : '#d1d5db'}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: copiedField === 'credentials' ? '#065f46' : '#374151' }}>
+                      {copiedField === 'credentials' ? <Check size={14} /> : <Copy size={14} />} {copiedField === 'credentials' ? 'Copied!' : 'Copy Credentials'}
+                    </button>
+                  </div>
                 </div>
                 <button className="tms-btn tms-btn-primary" onClick={() => { setConvertModal(null); setConvertResult(null); }}>Close</button>
               </div>
@@ -453,6 +478,15 @@ export default function TmsUploadResume() {
                   <div className="tms-form-group">
                     <label>Email *</label>
                     <input type="email" value={convertForm.email} onChange={(e) => setConvertForm({ ...convertForm, email: e.target.value })} required placeholder="employee@hrcore.com" />
+                  </div>
+                  <div className="tms-form-group">
+                    <label>Password *</label>
+                    <div style={{ position: 'relative', width: '100%' }}>
+                      <input type={showPassword ? 'text' : 'password'} value={convertForm.password} onChange={(e) => setConvertForm({ ...convertForm, password: e.target.value })} required placeholder="Set employee password" minLength={6} style={{ paddingRight: '40px', width: '100%', boxSizing: 'border-box' }} />
+                      <span onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </span>
+                    </div>
                   </div>
                   <div className="tms-form-group">
                     <label>Salary *</label>

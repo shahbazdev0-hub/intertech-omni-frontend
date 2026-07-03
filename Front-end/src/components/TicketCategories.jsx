@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
-const API = 'http://localhost:5000/api/ticket-categories';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/ticket-categories`;
 
 export default function TicketCategories() {
   const [categories, setCategories] = useState([]);

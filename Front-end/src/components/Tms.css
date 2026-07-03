@@ -7,11 +7,11 @@
 }
 
 .main-dashboard {
-  margin-left: 280px;
+  margin-left: 260px;
   flex: 1;
   min-height: 100vh;
   background: #f5f7fa;
-  width: calc(100vw - 280px);
+  width: calc(100vw - 260px);
   overflow-x: auto;
 }
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
-const API = 'http://localhost:5000/api/event-tickers';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/event-tickers`;
 
 export default function EventTickerManagement() {
   const [tickers, setTickers] = useState([]);

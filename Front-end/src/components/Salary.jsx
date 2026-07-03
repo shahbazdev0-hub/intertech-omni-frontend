@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 
-const API = 'http://localhost:5000/api/payroll';
-const LOAN_API = 'http://localhost:5000/api/loans';
-const OLD_API = 'http://localhost:5000/api/salaries';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/payroll`;
+const LOAN_API = `${API_URL}/api/loans`;
+const OLD_API = `${API_URL}/api/salaries`;
 
 const fmt = (n) => {
   if (n == null || isNaN(n)) return 'PKR 0';
@@ -43,18 +45,20 @@ export default function Salary() {
   useEffect(() => {
     const pp = JSON.parse(localStorage.getItem('payrollPermissions') || '[]');
     setPerms(pp);
-    fetch('http://localhost:5000/auth/status', { credentials: 'include' })
+    fetch(`${API_URL}/auth/status`, { credentials: 'include' })
       .then(r => r.json())
       .then(d => { if (d.loggedIn) setUser(d.user); });
   }, []);
 
-  const canCompute = perms.includes('COMPUTE_PAYROLL');
-  const canGenerate = perms.includes('GENERATE_PAYROLL');
-  const canExport = perms.includes('EXPORT_PAYROLL');
-  const canViewPayslip = perms.includes('VIEW_OWN_PAYSLIP') || perms.includes('VIEW_ALL_PAYSLIPS');
-  const canViewAll = perms.includes('VIEW_ALL_PAYSLIPS');
-  const canAdjust = perms.includes('ADJUST_SALARY');
-  const isManager = ['SUPER_ADMIN','ADMIN','HR'].includes(user?.role);
+  const _spp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const _shpp = Object.keys(_spp).length > 0 && _spp.salary;
+  const canCompute = perms.includes('COMPUTE_PAYROLL') || _shpp;
+  const canGenerate = perms.includes('GENERATE_PAYROLL') || _shpp;
+  const canExport = perms.includes('EXPORT_PAYROLL') || _shpp;
+  const canViewPayslip = perms.includes('VIEW_OWN_PAYSLIP') || perms.includes('VIEW_ALL_PAYSLIPS') || _shpp;
+  const canViewAll = perms.includes('VIEW_ALL_PAYSLIPS') || _shpp;
+  const canAdjust = perms.includes('ADJUST_SALARY') || _shpp;
+  const isManager = ['SUPER_ADMIN','ADMIN','HR'].includes(user?.role) || _shpp;
 
   const tabs = [];
   if (canCompute) tabs.push({ label: 'Monthly Payroll', comp: <MonthlyPayroll canGenerate={canGenerate} canExport={canExport} /> });
@@ -136,21 +140,35 @@ function MonthlyPayroll({ canGenerate, canExport }) {
     } catch (e) { alert('Failed to finalize'); }
   };
 
-  const exportCSV = () => {
-    if (!data?.payrolls?.length) return;
+  const getPayrollExportData = () => {
     const headers = ['Employee','Department','Type','Basic Salary','Saturday Pay','Home Warranty','Auto Warranty','Software Commission','Eid Bonus','Arrears','Tax','PF','Absence Ded.','Late Ded.','Loan Ded.','Fine','Gross','Deductions','Net Salary','Absent Days','Lates','Status'];
     const rows = data.payrolls.map(p => [
-      p.employeeName, p.department, p.departmentType, p.basicSalary,
+      p.employeeName, p.department, p.departmentName, p.basicSalary,
       p.saturdayExtraPay, p.homeWarrantyBonus, p.autoWarrantyBonus,
       p.softwareCommission, p.eidBonus, p.arrears,
       p.tax, p.providentFund, p.absenceDeduction, p.lateDeduction, p.loanDeduction, p.fine,
       p.grossEarnings, p.totalDeductions, p.netSalary,
       p.absentDays, p.normalLates + p.halfDayLates, p.status
     ]);
+    return { headers, rows };
+  };
+
+  const exportCSV = () => {
+    if (!data?.payrolls?.length) return;
+    const { headers, rows } = getPayrollExportData();
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `payroll_${MONTHS[month - 1]}_${year}.csv`; a.click();
+  };
+
+  const exportExcel = () => {
+    if (!data?.payrolls?.length) return;
+    const { headers, rows } = getPayrollExportData();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Payroll');
+    XLSX.writeFile(wb, `payroll_${MONTHS[month - 1]}_${year}.xlsx`);
   };
 
   return (
@@ -178,11 +196,24 @@ function MonthlyPayroll({ canGenerate, canExport }) {
           {canGenerate && data?.payrolls?.some(p => p.status === 'COMPUTED') && (
             <button style={S.btn('#7c3aed')} onClick={finalizePayroll}>Finalize</button>
           )}
-          {canExport && data?.payrolls?.length > 0 && (
+          {canExport && data?.payrolls?.length > 0 && (<>
             <button style={S.btnOutline} onClick={exportCSV}>Export CSV</button>
-          )}
+            <button style={{ ...S.btnOutline, borderColor: '#059669', color: '#059669' }} onClick={exportExcel}>Export Excel</button>
+          </>)}
         </div>
       </div>
+
+      {data?.ruleErrors?.length > 0 && (
+        <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px' }}>
+          <p style={{ margin: '0 0 8px', fontWeight: 600, color: '#92400e' }}>Payroll rules not configured for the following departments:</p>
+          <ul style={{ margin: 0, paddingLeft: '20px', color: '#92400e', fontSize: '0.875rem' }}>
+            {data.ruleErrors.map((e, i) => (
+              <li key={i}>{e.employeeName} — {e.department}: {e.error}</li>
+            ))}
+          </ul>
+          <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#92400e' }}>Go to Department Management and set Payroll Rules for these departments.</p>
+        </div>
+      )}
 
       {data && (
         <>
@@ -223,8 +254,8 @@ function MonthlyPayroll({ canGenerate, canExport }) {
                     </td>
                     <td style={S.td}>{p.department}</td>
                     <td style={S.td}>
-                      <span style={S.badge(p.departmentType === 'Technical' ? '#dbeafe' : '#f3e8ff', p.departmentType === 'Technical' ? '#1d4ed8' : '#7c3aed')}>
-                        {p.departmentType}
+                      <span style={S.badge(p.departmentName === 'Technical' ? '#dbeafe' : '#f3e8ff', p.departmentName === 'Technical' ? '#1d4ed8' : '#7c3aed')}>
+                        {p.departmentName}
                       </span>
                     </td>
                     <td style={S.td}>{fmt(p.basicSalary)}</td>
@@ -273,6 +304,7 @@ function Adjustments() {
   const [form, setForm] = useState({ homeWarrantySales: 0, autoWarrantyBonus: 0, softwareCommission: 0, eidBonus: 0, arrears: 0, fine: 0, notes: '' });
   const [current, setCurrent] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deptRules, setDeptRules] = useState(null);
 
   useEffect(() => {
     fetch(`${API}/dropdown/departments`, { credentials: 'include' })
@@ -327,6 +359,17 @@ function Adjustments() {
 
   const selectedEmp = employees.find(e => e.id === parseInt(empId));
 
+  useEffect(() => {
+    if (selectedEmp?.departmentId) {
+      fetch(`${API}/rules/${selectedEmp.departmentId}`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => setDeptRules(d))
+        .catch(() => setDeptRules(null));
+    } else {
+      setDeptRules(null);
+    }
+  }, [empId, selectedEmp?.departmentId]);
+
   return (
     <div style={S.card}>
       <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0C3D4A', marginBottom: '1rem' }}>Monthly Adjustments</h3>
@@ -359,31 +402,43 @@ function Adjustments() {
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-            <div>
-              <label style={S.label}>Home Warranty Sales (count)</label>
-              <input type="number" min="0" style={S.input} value={form.homeWarrantySales} onChange={e => setForm(f => ({ ...f, homeWarrantySales: +e.target.value }))} />
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>= {fmt(form.homeWarrantySales * 1000)} bonus</div>
-            </div>
-            <div>
-              <label style={S.label}>Auto Warranty Bonus (PKR)</label>
-              <input type="number" min="0" style={S.input} value={form.autoWarrantyBonus} onChange={e => setForm(f => ({ ...f, autoWarrantyBonus: +e.target.value }))} />
-            </div>
-            <div>
-              <label style={S.label}>Software Commission (PKR)</label>
-              <input type="number" min="0" style={S.input} value={form.softwareCommission} onChange={e => setForm(f => ({ ...f, softwareCommission: +e.target.value }))} />
-            </div>
-            <div>
-              <label style={S.label}>Eid Bonus (PKR)</label>
-              <input type="number" min="0" style={S.input} value={form.eidBonus} onChange={e => setForm(f => ({ ...f, eidBonus: +e.target.value }))} />
-            </div>
-            <div>
-              <label style={S.label}>Arrears (PKR)</label>
-              <input type="number" min="0" style={S.input} value={form.arrears} onChange={e => setForm(f => ({ ...f, arrears: +e.target.value }))} />
-            </div>
-            <div>
-              <label style={S.label}>Fine / Penalty (PKR)</label>
-              <input type="number" min="0" style={S.input} value={form.fine} onChange={e => setForm(f => ({ ...f, fine: +e.target.value }))} />
-            </div>
+            {deptRules?.homeWarrantyEnabled && (
+              <div>
+                <label style={S.label}>Home Warranty Sales (count)</label>
+                <input type="number" min="0" style={S.input} value={form.homeWarrantySales} onChange={e => setForm(f => ({ ...f, homeWarrantySales: +e.target.value }))} />
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>= {fmt(form.homeWarrantySales * (deptRules?.homeWarrantyPerSale || 1000))} bonus</div>
+              </div>
+            )}
+            {deptRules?.autoWarrantyEnabled && (
+              <div>
+                <label style={S.label}>Auto Warranty Bonus (PKR)</label>
+                <input type="number" min="0" style={S.input} value={form.autoWarrantyBonus} onChange={e => setForm(f => ({ ...f, autoWarrantyBonus: +e.target.value }))} />
+              </div>
+            )}
+            {deptRules?.softwareCommEnabled && (
+              <div>
+                <label style={S.label}>Software Commission (PKR)</label>
+                <input type="number" min="0" style={S.input} value={form.softwareCommission} onChange={e => setForm(f => ({ ...f, softwareCommission: +e.target.value }))} />
+              </div>
+            )}
+            {deptRules?.eidBonusEnabled && (
+              <div>
+                <label style={S.label}>Eid Bonus (PKR)</label>
+                <input type="number" min="0" step="100" style={S.input} value={form.eidBonus || ''} onChange={e => setForm(f => ({ ...f, eidBonus: +e.target.value }))} placeholder="0" />
+              </div>
+            )}
+            {deptRules?.arrearsEnabled && (
+              <div>
+                <label style={S.label}>Arrears (PKR)</label>
+                <input type="number" min="0" step="100" style={S.input} value={form.arrears || ''} onChange={e => setForm(f => ({ ...f, arrears: +e.target.value }))} placeholder="0" />
+              </div>
+            )}
+            {deptRules?.fineEnabled && (
+              <div>
+                <label style={S.label}>Fine / Penalty (PKR)</label>
+                <input type="number" min="0" step="100" style={S.input} value={form.fine || ''} onChange={e => setForm(f => ({ ...f, fine: +e.target.value }))} placeholder="0" />
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
@@ -412,6 +467,7 @@ function PayslipView({ canViewAll, user }) {
   const [empId, setEmpId] = useState('');
   const [payslip, setPayslip] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const printRef = useRef();
 
   useEffect(() => {
@@ -456,6 +512,23 @@ function PayslipView({ canViewAll, user }) {
     w.print();
   };
 
+  const sharePayslipEmail = async () => {
+    if (!payslip) return;
+    setSharing(true);
+    try {
+      const res = await fetch(`${API}/payslip/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ employeeId: parseInt(empId), month, year })
+      });
+      const data = await res.json();
+      if (res.ok) alert(data.message);
+      else alert(data.error || 'Failed to send email');
+    } catch (e) { alert('Failed to send email'); }
+    setSharing(false);
+  };
+
   const p = payslip;
 
   return (
@@ -484,6 +557,9 @@ function PayslipView({ canViewAll, user }) {
             {loading ? 'Loading...' : 'View Payslip'}
           </button>
           {p && <button style={S.btnOutline} onClick={printPayslip}>Print / PDF</button>}
+          {p && <button style={{ ...S.btn('#7c3aed') }} onClick={sharePayslipEmail} disabled={sharing}>
+            {sharing ? 'Sending...' : 'Share via Email'}
+          </button>}
         </div>
       </div>
 
@@ -493,7 +569,7 @@ function PayslipView({ canViewAll, user }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', borderBottom: '2px solid #0C3D4A', paddingBottom: '1rem' }}>
               <div>
                 <h2 style={{ margin: 0, color: '#0C3D4A', fontSize: '1.3rem' }}>PAYSLIP</h2>
-                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.85rem' }}>Intertech Omni — {MONTHS[month - 1]} {year}</p>
+                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.85rem' }}>Decoders-digital — {MONTHS[month - 1]} {year}</p>
               </div>
               <span style={S.badge(p.status === 'FINALIZED' ? '#dcfce7' : '#dbeafe', p.status === 'FINALIZED' ? '#166534' : '#1d4ed8')}>{p.status}</span>
             </div>
@@ -505,7 +581,7 @@ function PayslipView({ canViewAll, user }) {
                 <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{p.employee.position} — {p.employee.department?.name}</div>
                 <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{p.employee.email}</div>
                 <div style={{ marginTop: '4px' }}>
-                  <span style={S.badge(p.departmentType === 'Technical' ? '#dbeafe' : '#f3e8ff', p.departmentType === 'Technical' ? '#1d4ed8' : '#7c3aed')}>{p.departmentType}</span>
+                  <span style={S.badge(p.departmentName === 'Technical' ? '#dbeafe' : '#f3e8ff', p.departmentName === 'Technical' ? '#1d4ed8' : '#7c3aed')}>{p.departmentName}</span>
                   {' '}
                   <span style={S.badge('#e0f2fe', '#0369a1')}>{p.employee.employmentType}</span>
                 </div>

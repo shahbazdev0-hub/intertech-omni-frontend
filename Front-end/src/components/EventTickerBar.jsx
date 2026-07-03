@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const TICKER_API = 'http://localhost:5000/api/event-tickers/active';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const TICKER_API = `${API_URL}/api/event-tickers/active`;
 
 export default function EventTickerBar() {
   const [messages, setMessages] = useState([]);

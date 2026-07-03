@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 import Sidebar from './components/Sidebar';
 import EmployeeListPage from './components/EmployeeList';
 import Profile from './components/ViewEmployee';
@@ -15,10 +17,9 @@ import AttendanceLogs from './components/AttendanceLogs';
 import AboutPage from './components/AboutPage';
 import ContactPage from './components/ContactPage';
 import Reporting from './components/Reporting';
+import DashboardHome from './components/DashboardHome';
 import SystemSettings from './components/SystemSettings';
-import OvertimePay from './components/OvertimePay';
 import DepartmentManagement from './components/DepartmentManagement';
-import ShiftManagement from './components/ShiftManagement';
 import TmsUploadResume from './components/TmsUploadResume';
 import TmsFolders from './components/TmsFolders';
 import TmsFolderDetail from './components/TmsFolderDetail';
@@ -38,6 +39,7 @@ import DocumentPermissions from './components/DocumentPermissions';
 import EventTickerBar from './components/EventTickerBar';
 import EventTickerManagement from './components/EventTickerManagement';
 import HolidayManagement from './components/HolidayManagement';
+import PagePermissions from './components/PagePermissions';
 import './components/Tms.css';
 
 const LayoutWithSidebar = () => {
@@ -45,7 +47,7 @@ const LayoutWithSidebar = () => {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:5000/auth/logout', {
+      await fetch(`${API_URL}/auth/logout`, {
         method: 'POST',
         credentials: 'include'
       });
@@ -57,6 +59,7 @@ const LayoutWithSidebar = () => {
     localStorage.removeItem('ticketPermissions');
     localStorage.removeItem('payrollPermissions');
     localStorage.removeItem('documentPermissions');
+    localStorage.removeItem('pagePermissions');
     localStorage.removeItem('valid');
     navigate('/');
   };
@@ -94,14 +97,12 @@ const LayoutWithSidebar = () => {
           <Route path="/tms/user-management" element={<TmsUserManagement />} />
           <Route path="/tms/permissions" element={<TmsPermissions />} />
             <Route path="/leave-requests" element={<LeaveRequests />} />
-            <Route path="/dashboard" element={<Reporting />} />
+            <Route path="/dashboard" element={<DashboardHome />} />
             <Route path="/attendance" element={<AttendanceLogs />} />
             <Route path="/PerformanceReview" element={<PerformanceReview />} />
             <Route path="/Salary" element={<Salary />} />
-            <Route path="/overtime" element={<OvertimePay />} />
             <Route path="/departments" element={<DepartmentManagement />} />
             <Route path="/settings" element={<SystemSettings />} />
-            <Route path="/shifts" element={<ShiftManagement />} />
             <Route path="/holidays" element={<HolidayManagement />} />
             <Route path="/tickets" element={<TicketList />} />
             <Route path="/tickets/submit" element={<TicketSubmit />} />
@@ -112,7 +113,9 @@ const LayoutWithSidebar = () => {
             <Route path="/documents" element={<DocumentManagement />} />
             <Route path="/documents/permissions" element={<DocumentPermissions />} />
             <Route path="/event-ticker" element={<EventTickerManagement />} />
+            <Route path="/page-permissions" element={<PagePermissions />} />
             <Route path="/tickets/:id" element={<TicketDetail />} />
+            <Route path="/no-access" element={<div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}><h2>No Access</h2><p>You do not have permission to access any module. Please contact your administrator.</p></div>} />
             <Route path="*" element={<div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}><h2>404 — Page Not Found</h2></div>} />
           </Routes>
         </div>
@@ -129,7 +132,7 @@ function App() {
   useEffect(() => {
   const checkAuth = async () => {
     try {
-      const res = await fetch('http://localhost:5000/auth/status', {
+      const res = await fetch(`${API_URL}/auth/status`, {
         credentials: 'include',
       });
       const data = await res.json();

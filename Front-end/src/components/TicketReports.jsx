@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
-const API = 'http://localhost:5000/api/tickets';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/tickets`;
 
 const STATUS_COLORS = {
   pending: '#3b82f6', inProgress: '#f59e0b', resolved: '#10b981', invalid: '#ef4444', closed: '#6b7280',

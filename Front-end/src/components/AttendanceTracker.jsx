@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock, Play, Pause, Square, AlertTriangle, CheckCircle } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const BREAK_TYPES = {
   SHORT:     { label: 'Short Break',     minutes: 15,  color: '#3b82f6', desc: '15 minutes' },
   LONG:      { label: 'Long Break',      minutes: 30,  color: '#8b5cf6', desc: '30 minutes' },
@@ -127,7 +129,7 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
     if (!employeeId) return;
     try {
       const today = getCurrentTime().toISOString().split('T')[0];
-      const response = await fetch(`http://localhost:5000/api/attendance/current/${employeeId}?date=${today}`, { credentials: 'include' });
+      const response = await fetch(`${API_URL}/api/attendance/current/${employeeId}?date=${today}`, { credentials: 'include' });
       const data = await response.json();
       setCurrentAttendance(data.attendance);
     } catch (error) { console.error('Error fetching attendance:', error); }
@@ -137,7 +139,7 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
   const fetchShiftInfo = async () => {
     if (!employeeId) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/attendance/shift-info/${employeeId}`, { credentials: 'include' });
+      const res = await fetch(`${API_URL}/api/attendance/shift-info/${employeeId}`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setShiftInfo(data);
@@ -188,7 +190,7 @@ const AttendanceTracker = ({ employeeId, onAttendanceUpdate }) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/attendance/${endpoint}`, {
+      const response = await fetch(`${API_URL}/api/attendance/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

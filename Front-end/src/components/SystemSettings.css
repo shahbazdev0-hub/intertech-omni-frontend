@@ -419,13 +419,13 @@ input:checked + .slider:before {
   background: linear-gradient(135deg, #1a4f5e, #0C3D4A);
 }
 
-/* Input number controls */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
+/* Input number controls — scoped to system settings only */
+.system-settings-content input[type="number"]::-webkit-outer-spin-button,
+.system-settings-content input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-input[type="number"] {
+.system-settings-content input[type="number"] {
   -moz-appearance: textfield;
 }
