@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, Download, Edit3, MessageSquare, FileDown, X, Trash2, Eye, Search } from 'lucide-react';
 import mammoth from 'mammoth';
+import * as XLSX from 'xlsx';
 
-const API = 'http://localhost:5000/api/tms';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/tms`;
 
 export default function TmsFolderDetail() {
   const { id } = useParams();
@@ -88,11 +90,15 @@ export default function TmsFolderDetail() {
     }
   };
 
-  const handleExport = () => {
-    // Export resumes in this folder as CSV (filtered)
-    if (filteredResumes.length === 0) return;
+  const getFolderExportData = () => {
     const headers = ['First Name', 'Last Name', 'Position', 'Phone', 'Status', 'Priority', 'Assignee', 'Date'];
     const rows = filteredResumes.map(r => [r.firstName || '', r.lastName || '', r.designation, r.phone, r.status, r.priority, r.assignee?.name, new Date(r.date).toLocaleDateString()]);
+    return { headers, rows };
+  };
+
+  const handleExportCSV = () => {
+    if (filteredResumes.length === 0) return;
+    const { headers, rows } = getFolderExportData();
     const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v || ''}"`).join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -101,6 +107,15 @@ export default function TmsFolderDetail() {
     a.download = `${folder?.name || 'folder'}_resumes.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportExcel = () => {
+    if (filteredResumes.length === 0) return;
+    const { headers, rows } = getFolderExportData();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Resumes');
+    XLSX.writeFile(wb, `${folder?.name || 'folder'}_resumes.xlsx`);
   };
 
   const handleDelete = async (id, label) => {
@@ -201,8 +216,11 @@ export default function TmsFolderDetail() {
           <span className="tms-resume-count">{filteredResumes.length} of {resumes.length} resumes</span>
         </div>
         <div className="tms-header-right">
-          <button className="tms-btn tms-btn-secondary" onClick={handleExport} disabled={filteredResumes.length === 0}>
-            <FileDown size={16} /> Export
+          <button className="tms-btn tms-btn-secondary" onClick={handleExportCSV} disabled={filteredResumes.length === 0}>
+            <FileDown size={16} /> CSV
+          </button>
+          <button className="tms-btn tms-btn-secondary" onClick={handleExportExcel} disabled={filteredResumes.length === 0} style={{ backgroundColor: '#059669', color: 'white', borderColor: '#059669' }}>
+            <FileDown size={16} /> Excel
           </button>
           {canUpload && <button className="tms-btn tms-btn-primary" onClick={() => setShowForm(true)}>
             <Upload size={16} /> Upload Resume

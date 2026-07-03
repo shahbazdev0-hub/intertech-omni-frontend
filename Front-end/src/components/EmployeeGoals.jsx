@@ -423,7 +423,9 @@ const EmployeeGoals = () => {
   if (!authChecked) return null;
 
   // Role-based permissions
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
+  const pp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const hpp = Object.keys(pp).length > 0;
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN' || (hpp && pp.goals);
   const isTeamLead = role === 'HOD';
   const isEmployee = role === 'GENERAL_USER';
   const canManageGoals = isAdmin || isTeamLead;
@@ -701,7 +703,6 @@ const EmployeeGoals = () => {
               <th onClick={() => handleSort('progress')} className="sortable">
                 Progress {sortConfig.key === 'progress' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
-              <th>Alerts</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -731,7 +732,6 @@ const EmployeeGoals = () => {
                   <td>{getPriorityIndicator(goal.priority)}</td>
                   <td>{getStatusBadge(goal.status)}</td>
                   <td>{getProgressBar(goal.progress)}</td>
-                  <td>{getDueDateAlert(goal.deadline, goal.status)}</td>
                   <td>
                     {canUpdateGoal(goal) && (
                       <button

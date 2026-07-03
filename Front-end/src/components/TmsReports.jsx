@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, FileDown, X, BarChart3 } from 'lucide-react';
 
-const API = 'http://localhost:5000/api/tms';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/tms`;
 
 export default function TmsReports() {
   const [resumes, setResumes] = useState([]);

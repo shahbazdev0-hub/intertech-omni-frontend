@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const LoginForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,7 +16,7 @@ const LoginForm = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/auth/login', {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -29,9 +31,83 @@ const LoginForm = () => {
         if (data.user.isTmsUser) {
           localStorage.setItem('tmsUser', JSON.stringify(data.user));
           localStorage.setItem('tmsPermissions', JSON.stringify(data.user.permissions || []));
-          navigate('/tms/upload-resume');
+          localStorage.setItem('ticketPermissions', JSON.stringify(data.user.ticketPermissions || []));
+          localStorage.setItem('payrollPermissions', JSON.stringify(data.user.payrollPermissions || []));
+          localStorage.setItem('documentPermissions', JSON.stringify(data.user.documentPermissions || []));
+          localStorage.setItem('pagePermissions', JSON.stringify(data.user.pagePermissions || {}));
+          // IT Support goes to Ticket System, other TMS users go based on page permissions
+          if (data.user.isItSupport) {
+            navigate('/tickets');
+          } else {
+            const pp = data.user.pagePermissions || {};
+            const hasPerms = Object.keys(pp).length > 0;
+            const pageRouteMap = [
+              ['dashboard', '/dashboard'],
+              ['employees', '/EmployeeList'],
+              ['tms_upload_resume', '/tms/upload-resume'],
+              ['tms_folders', '/tms/folders'],
+              ['tms_reports', '/tms/reports'],
+              ['tms_audit', '/tms/audit'],
+              ['tms_user_management', '/tms/user-management'],
+              ['attendance_logs', '/attendance'],
+              ['leave_requests', '/leave-requests'],
+              ['salary', '/Salary'],
+              ['documents', '/documents'],
+              ['submit_ticket', '/tickets/submit'],
+              ['all_tickets', '/tickets'],
+              ['my_profile', '/AdminProfile'],
+              ['goals', '/EmployeeGoals'],
+              ['performance_reviews', '/PerformanceReview'],
+              ['holidays', '/holidays'],
+              ['reports', '/dashboard'],
+              ['event_ticker', '/event-ticker'],
+              ['system_settings', '/settings'],
+            ];
+            if (hasPerms) {
+              const firstAllowed = pageRouteMap.find(([key]) => pp[key] === true);
+              navigate(firstAllowed ? firstAllowed[1] : '/no-access');
+            } else {
+              // Custom roles with no permissions → no access
+              const builtInRoles = ['SUPER_ADMIN', 'ADMIN', 'HR', 'HOD', 'GENERAL_USER', 'TEAM_LEAD', 'EMPLOYEE'];
+              if (builtInRoles.includes(data.user.role)) {
+                navigate('/tms/upload-resume');
+              } else {
+                navigate('/no-access');
+              }
+            }
+          }
         } else {
-          navigate('/EmployeeList');
+          // Store ticket permissions for employee users
+          localStorage.setItem('ticketPermissions', JSON.stringify(data.user.ticketPermissions || []));
+          localStorage.setItem('payrollPermissions', JSON.stringify(data.user.payrollPermissions || []));
+          localStorage.setItem('documentPermissions', JSON.stringify(data.user.documentPermissions || []));
+          localStorage.setItem('pagePermissions', JSON.stringify(data.user.pagePermissions || {}));
+          // Check if custom role with no permissions
+          const empPP = data.user.pagePermissions || {};
+          const empHasPerms = Object.keys(empPP).length > 0;
+          const empBuiltInRoles = ['SUPER_ADMIN', 'ADMIN', 'HR', 'HOD', 'GENERAL_USER', 'TEAM_LEAD', 'EMPLOYEE'];
+          if (!empBuiltInRoles.includes(data.user.role) && !empHasPerms) {
+            navigate('/no-access');
+          } else if (empHasPerms) {
+            const empRouteMap = [
+              ['dashboard', '/dashboard'],
+              ['employees', '/EmployeeList'],
+              ['attendance_logs', '/attendance'],
+              ['leave_requests', '/leave-requests'],
+              ['salary', '/Salary'],
+              ['documents', '/documents'],
+              ['submit_ticket', '/tickets/submit'],
+              ['all_tickets', '/tickets'],
+              ['my_profile', '/AdminProfile'],
+              ['goals', '/EmployeeGoals'],
+              ['performance_reviews', '/PerformanceReview'],
+              ['holidays', '/holidays'],
+            ];
+            const firstAllowed = empRouteMap.find(([key]) => empPP[key] === true);
+            navigate(firstAllowed ? firstAllowed[1] : '/no-access');
+          } else {
+            navigate('/EmployeeList');
+          }
         }
       } else {
         setError(data.message || 'Invalid email or password');

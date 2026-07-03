@@ -1,7 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './EmployeeList.css';
-import { FaPlus, FaFileExport } from 'react-icons/fa';
+import { FaPlus, FaFileExport, FaEye, FaEyeSlash, FaKey } from 'react-icons/fa';
+import * as XLSX from 'xlsx';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const PAGE_SIZE = 10;
 
@@ -15,6 +18,8 @@ const EmployeeList = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
 
+  const [resetPasswordEmp, setResetPasswordEmp] = useState(null);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDept, setFilterDept] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -25,7 +30,7 @@ const EmployeeList = () => {
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch('http://localhost:5000/auth/status', { credentials: 'include' });
+        const r = await fetch(`${API_URL}/auth/status`, { credentials: 'include' });
         const j = await r.json();
         if (!j.loggedIn) { navigate('/login'); return; }
         setRole(j.user?.role || null);
@@ -44,6 +49,8 @@ const EmployeeList = () => {
       if (res.ok) setDepartments(await res.json());
     } catch (err) { console.error('Failed to fetch departments:', err); }
   };
+
+
 
   const fetchEmployees = async () => {
     try {
@@ -75,19 +82,32 @@ const EmployeeList = () => {
   const handleDeptChange = (e) => { setFilterDept(e.target.value); setCurrentPage(1); };
   const handleStatusChange = (e) => { setFilterStatus(e.target.value); setCurrentPage(1); };
 
-  const exportCSV = () => {
+  const getEmployeeExportData = () => {
     const headers = ['ID', 'Name', 'Email', 'Department', 'Position', 'Status', 'Role', 'Salary', 'Join Date', 'Age', 'Experience'];
     const rows = filtered.map(e => [
       e.id, e.name, e.email,
       e.department?.name || '', e.position, e.status, e.role,
       e.salary, e.joinDate?.split('T')[0] || '', e.age, e.experience
     ]);
+    return { headers, rows };
+  };
+
+  const exportCSV = () => {
+    const { headers, rows } = getEmployeeExportData();
     const csv = [headers, ...rows].map(r => r.map(v => `"${v ?? ''}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = 'employees.csv'; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportExcel = () => {
+    const { headers, rows } = getEmployeeExportData();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Employees');
+    XLSX.writeFile(wb, 'employees.xlsx');
   };
 
   const handleView = (id) => navigate(`/employee/${id}`);
@@ -174,8 +194,11 @@ const EmployeeList = () => {
 
   if (!authChecked) return null;
 
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
-  const isHROrAbove = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(role);
+  const pagePerms = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const hasPagePerms = Object.keys(pagePerms).length > 0;
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN' || (hasPagePerms && pagePerms.employees);
+  const isHROrAbove = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(role) || (hasPagePerms && pagePerms.employees);
+  const isTmsUser = !!localStorage.getItem('tmsUser');
 
   return (
     <div className="employee-list-container">
@@ -190,15 +213,10 @@ const EmployeeList = () => {
           <button onClick={exportCSV} className="btn btn-outline">
             <FaFileExport /> Export CSV
           </button>
-          {isHROrAbove && (
-            <button
-              onClick={handleCheckPromotions}
-              className="btn btn-outline"
-              title="Promote PROBATION employees who have completed 3 months"
-            >
-              🎓 Check Promotions
-            </button>
-          )}
+          <button onClick={exportExcel} className="btn btn-outline" style={{ borderColor: '#059669', color: '#059669' }}>
+            <FaFileExport /> Export Excel
+          </button>
+          {/* Check Promotions button removed */}
           {isAdmin && (
             <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
               <FaPlus /> Add Employee
@@ -270,6 +288,11 @@ const EmployeeList = () => {
                       <button className="tbl-btn tbl-btn-delete" onClick={() => handleDelete(emp.id)}>Delete</button>
                     </>
                   )}
+                  {isTmsUser && isAdmin && (
+                    <button className="tbl-btn tbl-btn-edit" onClick={() => setResetPasswordEmp(emp)} title="Reset Password">
+                      <FaKey size={12} /> Reset Password
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -301,11 +324,39 @@ const EmployeeList = () => {
       {isAdmin && showEditModal && editingEmployee && (
         <ModalForm title="Edit Employee" onSubmit={handleEditEmployeeSubmit} onClose={handleCloseModal} initialData={editingEmployee} departments={departments} />
       )}
+
+      {resetPasswordEmp && (
+        <ResetPasswordModal
+          employee={resetPasswordEmp}
+          onClose={() => setResetPasswordEmp(null)}
+        />
+      )}
     </div>
   );
 };
 
-const ModalForm = ({ title, onSubmit, onClose, initialData, departments = [], isAdd = false }) => (
+const ModalForm = ({ title, onSubmit, onClose, initialData, departments = [], isAdd = false }) => {
+  const [showAddPassword, setShowAddPassword] = React.useState(false);
+  const [roles, setRoles] = React.useState([]);
+  const [positions, setPositions] = React.useState([]);
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [rolesRes, posRes] = await Promise.all([
+          fetch(`${API_URL}/api/tms/manage/roles`, { credentials: 'include' }),
+          fetch(`${API_URL}/api/tms/manage/designations`, { credentials: 'include' }),
+        ]);
+        if (rolesRes.ok) setRoles(await rolesRes.json());
+        if (posRes.ok) setPositions(await posRes.json());
+      } catch (err) {
+        console.error('Failed to fetch roles/positions:', err);
+      }
+    };
+    fetchData();
+  }, []);
+
+  return (
   <div className="modal-backdrop">
     <div className="modal-card">
       <div className="modal-header">
@@ -313,15 +364,15 @@ const ModalForm = ({ title, onSubmit, onClose, initialData, departments = [], is
         <button className="modal-close" onClick={onClose}>&times;</button>
       </div>
       <div className="modal-body">
-        <form onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} autoComplete="off">
           <div className="form-row">
             <div className="form-field">
               <label className="form-label">Full Name *</label>
-              <input name="name" required placeholder="e.g. Jane Smith" defaultValue={initialData?.name} className="form-input" />
+              <input name="name" required placeholder="e.g. Jane Smith" defaultValue={initialData?.name} className="form-input" autoComplete="off" />
             </div>
             <div className="form-field">
               <label className="form-label">Email *</label>
-              <input name="email" required type="email" placeholder="e.g. jane@company.com" defaultValue={initialData?.email} className="form-input" />
+              <input name="email" required type="email" placeholder="e.g. jane@company.com" defaultValue={initialData?.email} className="form-input" autoComplete="new-email" />
             </div>
           </div>
 
@@ -329,7 +380,12 @@ const ModalForm = ({ title, onSubmit, onClose, initialData, departments = [], is
             <div className="form-row">
               <div className="form-field">
                 <label className="form-label">Password *</label>
-                <input name="password" required type="password" placeholder="Set a password" className="form-input" />
+                <div style={{ position: 'relative', width: '100%' }}>
+                  <input name="password" required type={showAddPassword ? 'text' : 'password'} placeholder="Set a password" className="form-input" style={{ paddingRight: 36, width: '100%', boxSizing: 'border-box' }} autoComplete="new-password" />
+                  <button type="button" onClick={() => setShowAddPassword(!showAddPassword)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 0, display: 'flex', alignItems: 'center' }}>
+                    {showAddPassword ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -344,7 +400,10 @@ const ModalForm = ({ title, onSubmit, onClose, initialData, departments = [], is
             </div>
             <div className="form-field">
               <label className="form-label">Position *</label>
-              <input name="position" required placeholder="e.g. Software Engineer" defaultValue={initialData?.position} className="form-input" />
+              <select name="position" required defaultValue={initialData?.position || ''} className="form-input">
+                <option value="">Select Position</option>
+                {positions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+              </select>
             </div>
           </div>
 
@@ -364,16 +423,6 @@ const ModalForm = ({ title, onSubmit, onClose, initialData, departments = [], is
 
           <div className="form-row">
             <div className="form-field">
-              <label className="form-label">Role *</label>
-              <select name="role" required defaultValue={initialData?.role || 'GENERAL_USER'} className="form-input">
-                <option value="GENERAL_USER">General User</option>
-                <option value="HOD">Head of Department (HOD)</option>
-                <option value="HR">HR Officer</option>
-                <option value="ADMIN">Admin</option>
-                <option value="SUPER_ADMIN">Super Admin</option>
-              </select>
-            </div>
-            <div className="form-field">
               <label className="form-label">Employment Type *</label>
               <select name="employmentType" required defaultValue={initialData?.employmentType || 'FTE'} className="form-input">
                 <option value="FTE">Full-Time (FTE) — 22 days/yr</option>
@@ -382,9 +431,6 @@ const ModalForm = ({ title, onSubmit, onClose, initialData, departments = [], is
                 <option value="CONSULTANT">Consultant — Fixed salary, no shift rules</option>
               </select>
             </div>
-          </div>
-
-          <div className="form-row">
             <div className="form-field">
               <label className="form-label">Join Date *</label>
               <input name="joinDate" required type="date" defaultValue={initialData?.joinDate?.split('T')[0]} className="form-input" />
@@ -412,6 +458,91 @@ const ModalForm = ({ title, onSubmit, onClose, initialData, departments = [], is
       </div>
     </div>
   </div>
-);
+  );
+};
+
+const ResetPasswordModal = ({ employee, onClose }) => {
+  const [newPassword, setNewPassword] = React.useState('');
+  const [showPwd, setShowPwd] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [success, setSuccess] = React.useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/employees/${employee.id}/reset-password`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset password');
+      setSuccess(`Password reset successfully for ${employee.name}`);
+      setNewPassword('');
+      setTimeout(() => onClose(), 1500);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-card" style={{ maxWidth: 420 }}>
+        <div className="modal-header">
+          <h2 className="modal-title">Reset Password</h2>
+          <button className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-body">
+          <p style={{ marginBottom: 16, color: '#374151', fontSize: '0.9rem' }}>
+            Reset password for <strong>{employee.name}</strong> ({employee.email})
+          </p>
+          {error && <p style={{ color: '#dc2626', marginBottom: 12, fontSize: '0.85rem' }}>{error}</p>}
+          {success && <p style={{ color: '#059669', marginBottom: 12, fontSize: '0.85rem' }}>{success}</p>}
+          <form onSubmit={handleSubmit} autoComplete="off">
+            <div className="form-field" style={{ marginBottom: 16 }}>
+              <label className="form-label">New Password *</label>
+              <div style={{ position: 'relative', width: '100%' }}>
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  placeholder="Enter new password (min 6 chars)"
+                  className="form-input"
+                  style={{ paddingRight: 36, width: '100%', boxSizing: 'border-box' }}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd(!showPwd)}
+                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 0, display: 'flex', alignItems: 'center' }}
+                >
+                  {showPwd ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+                </button>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" onClick={onClose} className="btn btn-outline">Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Resetting...' : 'Reset Password'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default EmployeeList;

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import './ViewEmployee.css';
 import './MyProfile.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const MyProfile = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,7 +20,7 @@ const MyProfile = () => {
     const fetchProfile = async () => {
       try {
         // Get session info first
-        const authRes = await fetch('http://localhost:5000/auth/status', { credentials: 'include' });
+        const authRes = await fetch(`${API_URL}/auth/status`, { credentials: 'include' });
         const authData = await authRes.json();
 
         if (!authData.loggedIn) {
@@ -29,8 +31,37 @@ const MyProfile = () => {
 
         setSessionUser(authData.user);
 
+        // TMS-only users don't have an employee record — unless they have page permissions
+        const _pp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+        const _hpp = Object.keys(_pp).length > 0;
+        if (authData.user.isTmsUser && authData.user.role !== 'SUPER_ADMIN' && !(_hpp && _pp.my_profile)) {
+          setError('Profile is only available for employee accounts.');
+          setLoading(false);
+          return;
+        }
+
+        // For TMS users or custom roles, find their employee record by email
+        let employeeId = authData.user.id;
+        let foundEmployee = false;
+        if (authData.user.isTmsUser || (_hpp && _pp.my_profile)) {
+          const empRes = await fetch(`${API_URL}/api/employees`, { credentials: 'include' });
+          if (empRes.ok) {
+            const emps = await empRes.json();
+            const match = emps.find(e => e.email === authData.user.email);
+            if (match) { employeeId = match.id; foundEmployee = true; }
+          }
+          if (!foundEmployee) {
+            // No employee record — show basic profile from session
+            const basicProfile = { name: authData.user.name, email: authData.user.email, role: authData.user.role, position: authData.user.position || '-' };
+            setProfile(basicProfile);
+            setForm({ name: basicProfile.name || '', age: '', experience: '' });
+            setLoading(false);
+            return;
+          }
+        }
+
         // Fetch own employee record
-        const res = await fetch(`http://localhost:5000/api/employees/${authData.user.id}`, { credentials: 'include' });
+        const res = await fetch(`${API_URL}/api/employees/${employeeId}`, { credentials: 'include' });
         if (!res.ok) {
           const err = await res.json();
           throw new Error(err.error || 'Failed to load profile');
@@ -53,33 +84,48 @@ const MyProfile = () => {
     setSaving(true);
     setSaveSuccess(false);
     try {
-      const res = await fetch(`http://localhost:5000/api/employees/${profile.id}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          age: parseInt(form.age) || profile.age,
-          experience: parseInt(form.experience) || profile.experience,
-          // Keep all other fields unchanged
-          email: profile.email,
-          department: profile.department?.name,
-          position: profile.position,
-          salary: profile.salary,
-          status: profile.status,
-          joinDate: profile.joinDate,
-          role: profile.role,
-          employmentType: profile.employmentType,
-        }),
-      });
+      let res;
+      if (profile.id) {
+        // Employee profile update
+        res = await fetch(`${API_URL}/api/employees/${profile.id}`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: form.name,
+            age: parseInt(form.age) || profile.age,
+            experience: parseInt(form.experience) || profile.experience,
+            email: profile.email,
+            department: profile.department?.name,
+            position: profile.position,
+            salary: profile.salary,
+            status: profile.status,
+            joinDate: profile.joinDate,
+            role: profile.role,
+            employmentType: profile.employmentType,
+          }),
+        });
+      } else {
+        // TMS-only user profile update
+        res = await fetch(`${API_URL}/api/tms/manage/profile`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: form.name }),
+        });
+      }
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to save');
+        throw new Error(err.error || err.message || 'Failed to save');
       }
 
       const updated = await res.json();
-      setProfile(updated);
+      if (profile.id) {
+        setProfile(updated);
+      } else {
+        setProfile(prev => ({ ...prev, name: updated.name }));
+      }
       setEditing(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -219,10 +265,6 @@ const MyProfile = () => {
           <span className="value">{formatDate(profile.joinDate)}</span>
         </div>
         <div className="employee-row">
-          <span className="label">Employment Type:</span>
-          <span className="value">{profile.employmentType}</span>
-        </div>
-        <div className="employee-row">
           <span className="label">Age:</span>
           {editing ? (
             <input
@@ -255,15 +297,13 @@ const MyProfile = () => {
         <div className="employee-row">
           <span className="label">Salary:</span>
           <span className="value">
-            {sessionUser?.role === 'GENERAL_USER'
-              ? '••••••'
-              : `$${profile.salary?.toLocaleString()}`}
+            {`$${profile.salary?.toLocaleString()}`}
           </span>
         </div>
       </div>
 
       {/* Leave Entitlement quick-view */}
-      <LeaveBalanceCard employeeId={profile.id} />
+      {profile.id && <LeaveBalanceCard employeeId={profile.id} />}
     </div>
   );
 };
@@ -273,7 +313,7 @@ const LeaveBalanceCard = ({ employeeId }) => {
   const [balance, setBalance] = useState(null);
 
   useEffect(() => {
-    fetch(`http://localhost:5000/api/leave/balance/${employeeId}`, { credentials: 'include' })
+    fetch(`${API_URL}/api/leave/balance/${employeeId}`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(data => setBalance(data))
       .catch(() => {});

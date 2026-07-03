@@ -6,11 +6,13 @@ import {
   Download, Upload, BarChart3, TrendingUp, Eye, Edit, Trash2,
   CheckSquare, Square, MoreHorizontal, Loader
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import './PerformanceReview.css';
 
 const PerformanceReview = () => {
   const [reviews, setReviews] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -39,6 +41,9 @@ const PerformanceReview = () => {
   });
 
   const [showReviewForm, setShowReviewForm] = useState(false);
+  const [viewingReview, setViewingReview] = useState(null);
+  const [editingReviewData, setEditingReviewData] = useState(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
   const [selectedReviews, setSelectedReviews] = useState(new Set());
   const [viewMode, setViewMode] = useState('card'); // 'card' | 'table'
   const [showFilters, setShowFilters] = useState(false);
@@ -52,13 +57,23 @@ const PerformanceReview = () => {
   const navigate = useNavigate();
 
   // API Base URL
-  const API_BASE = 'http://localhost:5000/api';
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API_BASE = `${API_URL}/api`;
+
+  // Generate monthly period options (Jan 2025 → Dec 2026)
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const periodOptions = [];
+  for (let year = 2025; year <= 2026; year++) {
+    for (let m = 0; m < 12; m++) {
+      periodOptions.push(`${monthNames[m]} ${year}`);
+    }
+  }
 
   // Auth check effect (first priority) - Following exact pattern from EmployeeGoals
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch('http://localhost:5000/auth/status', { credentials: 'include' });
+        const r = await fetch(`${API_URL}/auth/status`, { credentials: 'include' });
         const j = await r.json();
 
         if (!j.loggedIn) {
@@ -129,6 +144,21 @@ const PerformanceReview = () => {
     }
   };
 
+  // Fetch departments for filter dropdown
+  const fetchDepartments = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/departments`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setDepartments(Array.isArray(data) ? data : data.departments || []);
+      }
+    } catch (err) {
+      console.error("Error fetching departments:", err);
+    }
+  };
+
   // Fetch analytics data - Updated to check auth first
   const fetchAnalytics = async () => {
     try {
@@ -158,6 +188,7 @@ const PerformanceReview = () => {
     if (authChecked) {
       fetchReviews();
       fetchEmployees();
+      fetchDepartments();
     }
   }, [authChecked, currentPage, sortBy, sortOrder, filter]);
 
@@ -253,6 +284,23 @@ const PerformanceReview = () => {
     }
   };
 
+  const handleBulkExportExcel = () => {
+    if (selectedReviews.size > 0) {
+      const selected = reviews.filter(r => selectedReviews.has(r.id));
+      const headers = ['Employee', 'Department', 'Position', 'Rating', 'Review Date', 'Review Period', 'Feedback', 'Goals'];
+      const rows = selected.map(r => [
+        r.employee?.name || '', r.employee?.department?.name || '', r.employee?.position || '',
+        r.rating, r.reviewDate ? new Date(r.reviewDate).toLocaleDateString() : '', r.reviewPeriod,
+        r.feedback || '', r.goals || ''
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Performance Reviews');
+      XLSX.writeFile(wb, 'performance_reviews.xlsx');
+      alert(`${selectedReviews.size} reviews exported to Excel`);
+    }
+  };
+
   const handleAddReview = async () => {
     const { employeeId, rating, feedback, reviewDate, reviewPeriod, goals } = reviewData;
     
@@ -320,26 +368,60 @@ const PerformanceReview = () => {
     }
   };
 
-  const handleEditReview = async (id, updatedFields) => {
+  const openEditModal = (review) => {
+    setEditingReviewData({
+      id: review.id,
+      rating: review.rating,
+      feedback: review.feedback,
+      reviewPeriod: review.reviewPeriod,
+      reviewDate: review.reviewDate ? new Date(review.reviewDate).toISOString().split('T')[0] : '',
+      goals: review.goals || '',
+      employeeName: review.employee?.name || '',
+      department: review.employee?.department?.name || '',
+      position: review.employee?.position || '',
+    });
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editingReviewData) return;
+    const { id, rating, feedback, reviewPeriod, reviewDate, goals } = editingReviewData;
+
+    if (!rating || !feedback || !reviewPeriod || !reviewDate) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+    if (parseFloat(rating) < 0 || parseFloat(rating) > 5) {
+      alert('Rating must be between 0 and 5.');
+      return;
+    }
+
     try {
+      setEditSubmitting(true);
       const res = await fetch(`${API_BASE}/reviews/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedFields),
+        body: JSON.stringify({
+          rating: parseFloat(rating),
+          feedback,
+          reviewPeriod,
+          reviewDate,
+          goals,
+        }),
         credentials: 'include'
       });
 
       if (res.status === 401) return navigate('/login');
       if (res.status === 403) return alert('Forbidden');
       if (!res.ok) throw new Error('Failed to update review');
-      
-      const data = await res.json();
-      setReviews(prev =>
-        prev.map(r => (r.id === id ? data.review : r))
-      );
+
+      setEditingReviewData(null);
+      fetchReviews();
+      alert('Review updated successfully!');
     } catch (err) {
       console.error(err);
-      setError(err.message);
+      alert('Error updating review: ' + err.message);
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -366,10 +448,16 @@ const PerformanceReview = () => {
   if (!authChecked) return null;
 
   // Role-based permissions
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
+  const pp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const hpp = Object.keys(pp).length > 0;
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN' || (hpp && pp.performance_reviews);
   const isTeamLead = role === 'HOD' || role === 'HR';
-  const canManageReviews = isAdmin || isTeamLead;
-  // GENERAL_USER can only view their own reviews
+  const canManageReviews = isAdmin;                      // Only admins can Add/Edit/Delete
+  const canViewAnalytics = isAdmin || isTeamLead;        // Admins + HR/HOD can see analytics
+  const canExport = isAdmin || role === 'HR' || isAdmin; // Admins + HR can export
+  const canBulkSelect = isAdmin || canExport;            // Only roles that can do bulk actions
+  const isEmployee = role === 'GENERAL_USER' && !hpp;
+  const canSeeAllFilters = !isEmployee;                  // Employees don't need dept/rating/search filters
 
   if (loading && reviews.length === 0) {
     return (
@@ -410,7 +498,7 @@ const PerformanceReview = () => {
               <p className="pr-subtitle">Manage and track employee performance evaluations</p>
             </div>
             <div className="pr-header-actions">
-              {canManageReviews && (
+              {canViewAnalytics && (
               <button onClick={() => setShowAnalytics(!showAnalytics)} className="btn btn-analytics">
                 <BarChart3 size={18} />
                 <span>Analytics</span>
@@ -509,10 +597,7 @@ const PerformanceReview = () => {
                 <label>Review Period</label>
                 <select name="reviewPeriod" value={reviewData.reviewPeriod} onChange={handleInputChange} className="input">
                   <option value="">Select Period</option>
-                  <option value="Q1 2025">Q1 2025</option>
-                  <option value="Q2 2025">Q2 2025</option>
-                  <option value="Q3 2025">Q3 2025</option>
-                  <option value="Q4 2025">Q4 2025</option>
+                  {periodOptions.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
               <div className="form-group span-2">
@@ -544,9 +629,10 @@ const PerformanceReview = () => {
         {/* Search & Filters */}
         <div className="pr-card">
           <div className="toolbar">
+            {canSeeAllFilters && (
             <div className="search-wrap">
               <Search size={18} className="search-icon" />
-           <input 
+           <input
   type="text"
   name="search"
   value={filter.search}
@@ -555,11 +641,13 @@ const PerformanceReview = () => {
   className="input search-input"
 />
             </div>
+            )}
 
             <button onClick={() => setShowFilters(!showFilters)} className="btn btn-light">
               <Filter size={18} /><span>Filters</span>
             </button>
 
+            {canSeeAllFilters && (
             <div className="toggle-group">
               <button onClick={() => setViewMode('card')} className={`toggle ${viewMode==='card' ? 'active' : ''}`} title="Card view">
                 <Square size={18} />
@@ -568,18 +656,23 @@ const PerformanceReview = () => {
                 <MoreHorizontal size={18} />
               </button>
             </div>
+            )}
           </div>
 
           {showFilters && (
             <div className="pr-filters">
+              {canSeeAllFilters && (
               <div className="form-group">
                 <label>Department</label>
                 <select name="department" value={filter.department} onChange={handleFilterChange} className="input">
                   <option value="">All Departments</option>
-                  <option value="Design">Design</option>
-                  <option value="Engineering">Engineering</option>
+                  {departments.map(dept => (
+                    <option key={dept.id || dept.name} value={dept.name}>{dept.name}</option>
+                  ))}
                 </select>
               </div>
+              )}
+              {canSeeAllFilters && (
               <div className="form-group">
                 <label>Rating</label>
                 <select name="rating" value={filter.rating} onChange={handleFilterChange} className="input">
@@ -591,14 +684,12 @@ const PerformanceReview = () => {
                   <option value="1">1 Star</option>
                 </select>
               </div>
+              )}
               <div className="form-group">
                 <label>Period</label>
                 <select name="reviewPeriod" value={filter.reviewPeriod} onChange={handleFilterChange} className="input">
                   <option value="">All Periods</option>
-                  <option value="Q1 2025">Q1 2025</option>
-                  <option value="Q2 2025">Q2 2025</option>
-                  <option value="Q3 2025">Q3 2025</option>
-                  <option value="Q4 2025">Q4 2025</option>
+                  {periodOptions.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
               <div className="form-group">
@@ -617,16 +708,25 @@ const PerformanceReview = () => {
             </div>
           )}
 
-          {selectedReviews.size > 0 && (
+          {selectedReviews.size > 0 && canBulkSelect && (
             <div className="bulk-bar">
               <span className="muted">{selectedReviews.size} selected</span>
               <div className="row gap-sm">
+                {canExport && (
+                <>
                 <button onClick={handleBulkExport} className="btn btn-success btn-sm">
-                  <Download size={14} /> <span>Export</span>
+                  <Download size={14} /> <span>CSV</span>
                 </button>
+                <button onClick={handleBulkExportExcel} className="btn btn-success btn-sm" style={{ backgroundColor: '#059669' }}>
+                  <Download size={14} /> <span>Excel</span>
+                </button>
+                </>
+                )}
+                {canManageReviews && (
                 <button onClick={handleBulkDelete} className="btn btn-danger btn-sm">
                   <Trash2 size={14} /> <span>Delete</span>
                 </button>
+                )}
               </div>
             </div>
           )}
@@ -655,6 +755,7 @@ const PerformanceReview = () => {
                 <div key={review.id} className="review-card">
                   <div className="review-top">
                     <div className="row gap">
+                      {canBulkSelect && (
                       <button
                         onClick={() => handleSelectReview(review.id)}
                         className={`check ${selectedReviews.has(review.id) ? 'active' : ''}`}
@@ -662,6 +763,7 @@ const PerformanceReview = () => {
                       >
                         {selectedReviews.has(review.id) ? <CheckSquare size={20} /> : <Square size={20} />}
                       </button>
+                      )}
                       <div>
                         <h4 className="review-name">
                           <User size={18} /> {review.employee.name}
@@ -670,32 +772,21 @@ const PerformanceReview = () => {
                       </div>
                     </div>
                     <div className="row gap-sm">
-                      <button className="icon-btn" title="View"><Eye size={16} /></button>
-<button
-  className="icon-btn"
-  title="Edit"
-  onClick={() => {
-    const newRating = parseFloat(prompt("Enter new rating (0-5):", review.rating));
-    const newFeedback = prompt("Enter new feedback:", review.feedback);
-
-    if (isNaN(newRating) || newRating < 0 || newRating > 5) {
-      return alert("Invalid rating");
-    }
-
-    handleEditReview(review.id, { rating: newRating, feedback: newFeedback });
-  }}
->
+                      <button className="icon-btn" title="View" onClick={() => setViewingReview(review)}><Eye size={16} /></button>
+{canManageReviews && (
+<button className="icon-btn" title="Edit" onClick={() => openEditModal(review)}>
   <Edit size={16} />
 </button>
-
-
-                      <button 
+)}
+{canManageReviews && (
+                      <button
                         onClick={() => handleDeleteReview(review.id)}
-                        className="icon-btn danger" 
+                        className="icon-btn danger"
                         title="Delete"
                       >
                         <Trash2 size={16} />
                       </button>
+)}
                     </div>
                   </div>
 
@@ -733,12 +824,14 @@ const PerformanceReview = () => {
               <table className="pr-table">
                 <thead>
                 <tr>
+                  {canBulkSelect && (
                   <th>
                     <button onClick={handleSelectAll} className="icon-btn">
                       {(selectedReviews.size === reviews.length && reviews.length>0)
                         ? <CheckSquare size={20} /> : <Square size={20} />}
                     </button>
                   </th>
+                  )}
                   <th>Employee</th>
                   <th>Department</th>
                   <th>Rating</th>
@@ -750,11 +843,13 @@ const PerformanceReview = () => {
                 <tbody>
                 {reviews.map(review => (
                   <tr key={review.id}>
+                    {canBulkSelect && (
                     <td>
                       <button onClick={() => handleSelectReview(review.id)} className="icon-btn">
                         {selectedReviews.has(review.id) ? <CheckSquare size={20} /> : <Square size={20} />}
                       </button>
                     </td>
+                    )}
                     <td className="strong">{review.employee.name}</td>
                     <td>{review.employee.department.name}</td>
                     <td>
@@ -767,15 +862,21 @@ const PerformanceReview = () => {
                     <td>{new Date(review.reviewDate).toLocaleDateString()}</td>
                     <td>
                       <div className="row gap-sm">
-                        <button className="icon-btn" title="View"><Eye size={16} /></button>
-                        <button className="icon-btn" title="Edit"><Edit size={16} /></button>
-                        <button 
+                        <button className="icon-btn" title="View" onClick={() => setViewingReview(review)}><Eye size={16} /></button>
+                        {canManageReviews && (
+                        <button className="icon-btn" title="Edit" onClick={() => openEditModal(review)}>
+                          <Edit size={16} />
+                        </button>
+                        )}
+                        {canManageReviews && (
+                        <button
                           onClick={() => handleDeleteReview(review.id)}
-                          className="icon-btn danger" 
+                          className="icon-btn danger"
                           title="Delete"
                         >
                           <Trash2 size={16} />
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -871,9 +972,135 @@ const PerformanceReview = () => {
             </div>
           </div>
         )}
+
+        {/* View Review Modal */}
+        {viewingReview && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, backdropFilter: 'blur(2px)' }}>
+            <div style={{ background: 'white', borderRadius: '12px', width: '560px', maxWidth: '95vw', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              <div style={{ background: '#0C3D4A', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '12px 12px 0 0' }}>
+                <h3 style={{ margin: 0, color: 'white', fontSize: '1.1rem', fontWeight: 700 }}>Performance Review Details</h3>
+                <button onClick={() => setViewingReview(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+              </div>
+              <div style={{ padding: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#0C3D4A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '1.1rem' }}>
+                    {viewingReview.employee?.name?.split(' ').map(n => n[0]).join('') || '?'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#0C3D4A' }}>{viewingReview.employee?.name}</div>
+                    <div style={{ color: '#64748b', fontSize: '0.875rem' }}>{viewingReview.employee?.position || 'N/A'} &bull; {viewingReview.employee?.department?.name}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
+                  <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Rating</div>
+                    <div style={{ fontWeight: 700, fontSize: '1.25rem', color: '#0C3D4A' }}>
+                      {viewingReview.rating} / 5.0
+                      <div className="stars" style={{ display: 'inline-flex', marginLeft: '0.5rem' }}>{renderStars(viewingReview.rating)}</div>
+                    </div>
+                  </div>
+                  <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Period</div>
+                    <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#0C3D4A' }}>{viewingReview.reviewPeriod}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(viewingReview.reviewDate).toLocaleDateString()}</div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Feedback</div>
+                  <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '8px', color: '#374151', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                    {viewingReview.feedback}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Goals & Objectives</div>
+                  <div style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '8px', color: '#166534', fontSize: '0.9rem', lineHeight: 1.6, border: '1px solid #bbf7d0' }}>
+                    {viewingReview.goals}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button onClick={() => setViewingReview(null)} style={{ padding: '0.5rem 1.25rem', background: '#0C3D4A', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Review Modal */}
+        {editingReviewData && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, backdropFilter: 'blur(2px)' }}>
+            <div style={{ background: 'white', borderRadius: '12px', width: '560px', maxWidth: '95vw', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              <div style={{ background: '#0C3D4A', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '12px 12px 0 0' }}>
+                <h3 style={{ margin: 0, color: 'white', fontSize: '1.1rem', fontWeight: 700 }}>Edit Performance Review</h3>
+                <button onClick={() => setEditingReviewData(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>&times;</button>
+              </div>
+              <div style={{ padding: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#0C3D4A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.9rem' }}>
+                    {editingReviewData.employeeName?.split(' ').map(n => n[0]).join('') || '?'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#0C3D4A' }}>{editingReviewData.employeeName}</div>
+                    <div style={{ color: '#64748b', fontSize: '0.8rem' }}>{editingReviewData.position} &bull; {editingReviewData.department}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rating (0-5) *</label>
+                    <input type="number" min="0" max="5" step="0.1" value={editingReviewData.rating}
+                      onChange={e => setEditingReviewData(p => ({ ...p, rating: e.target.value }))}
+                      style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1.5px solid #e2e8f0', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Review Date *</label>
+                    <input type="date" value={editingReviewData.reviewDate}
+                      onChange={e => setEditingReviewData(p => ({ ...p, reviewDate: e.target.value }))}
+                      style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1.5px solid #e2e8f0', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Review Period *</label>
+                  <select value={editingReviewData.reviewPeriod}
+                    onChange={e => setEditingReviewData(p => ({ ...p, reviewPeriod: e.target.value }))}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1.5px solid #e2e8f0', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }}>
+                    <option value="">Select Period</option>
+                    {periodOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Feedback *</label>
+                  <textarea rows={4} value={editingReviewData.feedback}
+                    onChange={e => setEditingReviewData(p => ({ ...p, feedback: e.target.value }))}
+                    style={{ width: '100%', padding: '0.625rem', border: '1.5px solid #e2e8f0', borderRadius: '6px', fontSize: '0.9rem', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                </div>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Goals & Objectives</label>
+                  <textarea rows={3} value={editingReviewData.goals}
+                    onChange={e => setEditingReviewData(p => ({ ...p, goals: e.target.value }))}
+                    style={{ width: '100%', padding: '0.625rem', border: '1.5px solid #e2e8f0', borderRadius: '6px', fontSize: '0.9rem', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                  <button onClick={() => setEditingReviewData(null)} style={{ padding: '0.5rem 1rem', border: '1.5px solid #e2e8f0', borderRadius: '6px', background: 'white', color: '#374151', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500 }}>Cancel</button>
+                  <button onClick={handleEditSubmit} disabled={editSubmitting}
+                    style={{ padding: '0.5rem 1.25rem', background: '#0C3D4A', color: 'white', border: 'none', borderRadius: '6px', cursor: editSubmitting ? 'not-allowed' : 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
+                    {editSubmitting ? 'Updating...' : 'Update Review'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-export default PerformanceReview; 
+export default PerformanceReview;

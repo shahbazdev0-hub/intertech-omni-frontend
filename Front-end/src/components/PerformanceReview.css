@@ -77,22 +77,22 @@
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: #0C3D4A;
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #2563eb;
+  background: #0a3039;
   transform: translateY(-1px);
 }
 
 .btn-analytics {
-  background: #8b5cf6;
+  background: #0C3D4A;
   color: white;
 }
 
 .btn-analytics:hover:not(:disabled) {
-  background: #7c3aed;
+  background: #0a3039;
 }
 
 .btn-light {
@@ -178,8 +178,8 @@
 
 .input:focus, .textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #0C3D4A;
+  box-shadow: 0 0 0 3px rgba(12, 61, 74, 0.1);
 }
 
 .input-sm {
@@ -387,7 +387,7 @@
 }
 
 .toggle.active {
-  background: #3b82f6;
+  background: #0C3D4A;
   color: white;
 }
 
@@ -416,7 +416,7 @@
 }
 
 .stat-blue {
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  background: linear-gradient(135deg, #0C3D4A, #083038);
   color: white;
 }
 
@@ -426,7 +426,7 @@
 }
 
 .stat-purple {
-  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  background: linear-gradient(135deg, #0C3D4A, #083038);
   color: white;
 }
 
@@ -552,7 +552,7 @@
 }
 
 .check.active {
-  color: #3b82f6;
+  color: #0C3D4A;
 }
 
 .check.active:hover {
@@ -616,7 +616,7 @@
 }
 
 .btn.page.active {
-  background: #3b82f6;
+  background: #0C3D4A;
   color: white;
 }
 

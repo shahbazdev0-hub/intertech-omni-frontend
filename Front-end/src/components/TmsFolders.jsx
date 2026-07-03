@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FolderOpen, Plus, Trash2, X, FileText } from 'lucide-react';
 
-const API = 'http://localhost:5000/api/tms';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/tms`;
 
 export default function TmsFolders() {
   const navigate = useNavigate();

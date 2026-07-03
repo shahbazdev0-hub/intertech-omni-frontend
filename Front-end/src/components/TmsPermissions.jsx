@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Save, X, RefreshCw } from 'lucide-react';
 
-const API = 'http://localhost:5000/api/tms';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${API_URL}/api/tms`;
 
 const ALL_PERMISSIONS = [
   { key: 'UPLOAD_RESUME', label: 'Upload Resume', group: 'Resumes' },
@@ -38,7 +39,8 @@ export default function TmsPermissions() {
   const [success, setSuccess] = useState('');
 
   const perms = JSON.parse(localStorage.getItem('tmsPermissions') || '[]');
-  const canManage = perms.includes('MANAGE_PERMISSIONS');
+  const _pp = JSON.parse(localStorage.getItem('pagePermissions') || '{}');
+  const canManage = perms.includes('MANAGE_PERMISSIONS') || (Object.keys(_pp).length > 0 && _pp.tms_permissions);
 
   const fetchPermissions = async () => {
     try {

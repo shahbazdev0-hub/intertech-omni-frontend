@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Calendar, FileText, Loader2 } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const LeaveApplicationForm = () => {
   const [formData, setFormData] = useState({
     employeeId: 1, // Hardcoded for single employee
@@ -297,7 +299,7 @@ const calculateDuration = () => {
         submitData.append('handoverDocument', formData.handoverDocument);
       }
 
-      const response = await fetch('http://localhost:5000/api/leave', {
+      const response = await fetch(`${API_URL}/api/leave`, {
         method: 'POST',
         credentials: 'include',
         body: submitData

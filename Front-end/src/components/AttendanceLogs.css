@@ -322,6 +322,14 @@
   background-color: #f9fafb;
 }
 
+.attendance-table-row-absent {
+  background-color: #fef2f2 !important;
+}
+
+.attendance-table-row-absent:hover {
+  background-color: #fee2e2 !important;
+}
+
 .attendance-table-td {
   padding: 1rem !important;
   white-space: nowrap !important;
@@ -818,12 +826,12 @@
 }
 
 .attendance-btn-end-break {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #0C3D4A, #0a3039);
   color: white;
 }
 
 .attendance-btn-end-break:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #0a3039, #083038);
 }
 
 .attendance-btn-refresh {
